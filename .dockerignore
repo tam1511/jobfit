@@ -1,0 +1,12 @@
+**/.git
+**/.venv
+**/node_modules
+**/.next
+**/out
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/.DS_Store
+backend/.data
