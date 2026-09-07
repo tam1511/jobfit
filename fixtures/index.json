@@ -1,0 +1,33 @@
+{
+  "cases": [
+    {
+      "id": "case-01-backend-strong",
+      "band": "strong",
+      "role": "Senior Backend Engineer",
+      "path": "case-01-backend-strong",
+      "cv": "case-01-backend-strong/cv.md",
+      "jd": "case-01-backend-strong/jd.md",
+      "expected": "case-01-backend-strong/expected.json"
+    },
+    {
+      "id": "case-02-marketing-partial",
+      "band": "partial",
+      "role": "Digital Marketing Manager",
+      "path": "case-02-marketing-partial",
+      "cv": "case-02-marketing-partial/cv.md",
+      "cv_pdf": "case-02-marketing-partial/cv.pdf",
+      "jd": "case-02-marketing-partial/jd.md",
+      "expected": "case-02-marketing-partial/expected.json",
+      "notes": "Demo case. cv.pdf is a rendering of cv.md; both are checked to produce the same scorer input (see backend/tests/test_pdf_md_parity.py)."
+    },
+    {
+      "id": "case-03-data-weak",
+      "band": "weak",
+      "role": "Data Scientist",
+      "path": "case-03-data-weak",
+      "cv": "case-03-data-weak/cv.md",
+      "jd": "case-03-data-weak/jd.md",
+      "expected": "case-03-data-weak/expected.json"
+    }
+  ]
+}

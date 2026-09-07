@@ -1,0 +1,56 @@
+{
+  "case_id": "case-03-data-weak",
+  "notes": "Weak match. A junior data analyst applying for a mid-level Data Scientist role. Missing Python, pandas, scikit-learn, PyTorch, production ML, statistical modelling and warehouse SQL. Years of experience are well short of the 4+ the JD asks for. The rubric must place this clearly in the weak band, and every core requirement should surface as a high-severity gap.",
+  "expected_overall": {
+    "min": 15,
+    "max": 40
+  },
+  "expected_breakdown": {
+    "hard_skills_match": { "min": 0, "max": 25 },
+    "experience_match": { "min": 10, "max": 40 },
+    "ats_keywords": { "min": 10, "max": 40 },
+    "quantified_achievements": { "min": 0, "max": 30 },
+    "formatting_and_length": { "min": 50, "max": 90 }
+  },
+  "required_matched_keywords": [
+    "SQL"
+  ],
+  "required_missing_keywords": [
+    "Python",
+    "pandas",
+    "scikit-learn",
+    "PyTorch",
+    "BigQuery",
+    "Snowflake",
+    "Redshift",
+    "feature drift",
+    "experiment design"
+  ],
+  "required_gaps": [
+    {
+      "id": "no_python",
+      "severity": "high",
+      "about": "The JD requires strong Python with pandas, scikit-learn and PyTorch. The CV has none of these."
+    },
+    {
+      "id": "no_production_ml",
+      "severity": "high",
+      "about": "The JD requires at least one ML model shipped to production. The CV has no ML work at all, let alone in production."
+    },
+    {
+      "id": "underqualified_years",
+      "severity": "high",
+      "about": "The JD asks for 4+ years as a Data Scientist. The CV shows two years as a Data Analyst plus an internship."
+    },
+    {
+      "id": "no_warehouse_sql",
+      "severity": "medium",
+      "about": "SQL is present against a MySQL replica, but the JD asks for warehouse SQL (BigQuery, Snowflake, or Redshift)."
+    },
+    {
+      "id": "no_statistical_modelling",
+      "severity": "high",
+      "about": "Statistical modelling and experiment design are stated requirements. The CV does not mention either."
+    }
+  ]
+}

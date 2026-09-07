@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "scale": {
+    "min": 0,
+    "max": 100
+  },
+  "categories": [
+    {
+      "id": "hard_skills_match",
+      "name": "Hard Skills Match",
+      "weight": 30,
+      "measurement": "Percentage of required skills in the JD that appear in the CV.",
+      "scoring_rule": "0-100 based on the fraction of JD-required hard skills for which the CV shows explicit evidence. Missing skills reduce the score proportionally; do not credit skills that are only implied."
+    },
+    {
+      "id": "experience_match",
+      "name": "Experience Match",
+      "weight": 25,
+      "measurement": "Alignment of years of experience and seniority/level with the JD requirements.",
+      "scoring_rule": "0-100 based on how closely the CV's total relevant years and the seniority of past roles match what the JD asks for. Penalise both under- and over-qualification only when the JD is explicit about the level."
+    },
+    {
+      "id": "ats_keywords",
+      "name": "ATS Keywords",
+      "weight": 20,
+      "measurement": "Percentage of industry-specific phrases from the JD that appear in the CV.",
+      "scoring_rule": "0-100 based on the fraction of domain terms and named tools/frameworks from the JD that appear verbatim (or as a close morphological variant) in the CV."
+    },
+    {
+      "id": "quantified_achievements",
+      "name": "Quantified Achievements",
+      "weight": 15,
+      "measurement": "Percentage of CV bullets that contain measurable outcome numbers.",
+      "scoring_rule": "0-100 based on the fraction of bullets in the Experience and Projects sections that include a concrete metric (percentage, count, currency, time delta, scale). Aspirational statements without numbers do not count."
+    },
+    {
+      "id": "formatting_and_length",
+      "name": "Formatting & Length",
+      "weight": 10,
+      "measurement": "Alignment of CV structure, readability, and length with the expectations of the JD.",
+      "scoring_rule": "0-100 based on presence of the sections a reader would expect for this role (Summary, Experience, Skills, Education), consistent formatting, and total length appropriate for the seniority the JD targets."
+    }
+  ],
+  "rules": {
+    "evidence_required": true,
+    "penalise_unsupported_claims": true,
+    "gap_over_assumption": "When evidence for a criterion is not present in the CV, record it as a gap. Never assume the requirement is satisfied."
+  }
+}
