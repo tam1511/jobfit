@@ -33,6 +33,9 @@ yarn-error.log*
 *.sqlite
 *.sqlite3
 
+# JobFit local data
+backend/.data/
+
 # Editors
 .vscode/
 .idea/

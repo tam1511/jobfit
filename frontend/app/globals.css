@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-strong: #16a34a;
+  --color-partial: #ecad0a;
+  --color-weak: #dc2626;
+  --color-primary: #209dd7;
+  --color-ink: #032147;
+  --color-muted: #888888;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: var(--color-ink);
+  background-color: #f8fafc;
+  font-family: var(--font-sans);
+}
