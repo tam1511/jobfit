@@ -1,0 +1,32 @@
+{
+  "case_id": "case-01-backend-strong",
+  "notes": "Strong match. The CV covers Python, FastAPI, PostgreSQL, Docker and AWS with concrete numbers, and the seniority aligns with the JD's 5+ years requirement. Kafka, OpenTelemetry and Terraform are absent, but those are nice-to-haves.",
+  "expected_overall": {
+    "min": 78,
+    "max": 92
+  },
+  "expected_breakdown": {
+    "hard_skills_match": { "min": 85, "max": 100 },
+    "experience_match": { "min": 80, "max": 100 },
+    "ats_keywords": { "min": 75, "max": 100 },
+    "quantified_achievements": { "min": 70, "max": 100 },
+    "formatting_and_length": { "min": 70, "max": 100 }
+  },
+  "required_matched_keywords": [
+    "Python",
+    "FastAPI",
+    "PostgreSQL",
+    "Docker",
+    "AWS",
+    "ECS",
+    "S3",
+    "RDS",
+    "REST"
+  ],
+  "required_missing_keywords": [
+    "Kafka",
+    "OpenTelemetry",
+    "Terraform"
+  ],
+  "required_gaps": []
+}

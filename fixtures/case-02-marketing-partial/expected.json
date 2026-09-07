@@ -1,0 +1,45 @@
+{
+  "case_id": "case-02-marketing-partial",
+  "notes": "Partial match, chosen as the demo case. The CV has SEO, GA4 and content strategy with real numbers, but is missing three of the JD's core requirements: HubSpot, LinkedIn Ads, and any evidence of A/B testing methodology. Score should sit clearly in the partial band and gap detection must surface these three items so the Optimise flow has something to work on.",
+  "expected_overall": {
+    "min": 50,
+    "max": 70
+  },
+  "expected_breakdown": {
+    "hard_skills_match": { "min": 40, "max": 65 },
+    "experience_match": { "min": 55, "max": 80 },
+    "ats_keywords": { "min": 45, "max": 70 },
+    "quantified_achievements": { "min": 45, "max": 75 },
+    "formatting_and_length": { "min": 60, "max": 90 }
+  },
+  "required_matched_keywords": [
+    "SEO",
+    "Google Analytics",
+    "content strategy",
+    "editorial calendar",
+    "Google Ads"
+  ],
+  "required_missing_keywords": [
+    "HubSpot",
+    "LinkedIn Ads",
+    "A/B testing",
+    "lead scoring"
+  ],
+  "required_gaps": [
+    {
+      "id": "no_hubspot",
+      "severity": "high",
+      "about": "HubSpot experience is a stated requirement and the CV shows none."
+    },
+    {
+      "id": "no_ab_testing",
+      "severity": "high",
+      "about": "The JD asks for A/B testing on landing pages with a clear methodology. The CV describes landing page work but no experimentation."
+    },
+    {
+      "id": "no_linkedin_ads",
+      "severity": "medium",
+      "about": "Paid acquisition on LinkedIn Ads is required alongside Google Ads. The CV only shows Google Ads."
+    }
+  ]
+}
