@@ -9,11 +9,33 @@ export type SessionUser = {
   name: string;
 };
 
+export type ScoreCategory = {
+  category: string;
+  score: number;
+  weight: number;
+  evidence: string;
+};
+
+export type ScoreGap = {
+  severity: "high" | "medium" | "low";
+  evidence: string;
+  suggestion: string;
+};
+
+export type ScoreResult = {
+  overall_score: number;
+  breakdown: ScoreCategory[];
+  gaps: ScoreGap[];
+  matched_keywords: string[];
+  missing_keywords: string[];
+};
+
 export type UploadResult = {
   upload_id: number;
   filename: string;
   extracted_text: string;
   jd_text: string;
+  score: ScoreResult;
 };
 
 export async function login(name: string): Promise<SessionUser> {
@@ -43,6 +65,14 @@ export async function uploadCv(
   });
   if (!response.ok) {
     throw new Error(await extractError(response, "Upload failed."));
+  }
+  return response.json();
+}
+
+export async function fetchScore(uploadId: number): Promise<ScoreResult> {
+  const response = await fetch(apiUrl(`/api/uploads/${uploadId}/score`));
+  if (!response.ok) {
+    throw new Error(await extractError(response, "Could not load score."));
   }
   return response.json();
 }

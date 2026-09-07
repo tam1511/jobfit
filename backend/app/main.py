@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
+from typing import Callable
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
@@ -19,6 +20,10 @@ from app.config import Settings, load_settings
 from app.db import connect, init_db
 from app.routers import session as session_router
 from app.routers import uploads as uploads_router
+from app.scoring import ScoreResult, score
+
+
+ScoreFn = Callable[[str, str], ScoreResult]
 
 
 def _mount_frontend(app: FastAPI, frontend_dir: Path) -> None:
@@ -56,7 +61,10 @@ def _mount_frontend(app: FastAPI, frontend_dir: Path) -> None:
         return FileResponse(app_index if app_index.is_file() else index)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    score_fn: ScoreFn | None = None,
+) -> FastAPI:
     settings = settings or load_settings()
 
     @asynccontextmanager
@@ -67,6 +75,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="JobFit", lifespan=lifespan)
     app.state.settings = settings
     app.state.db_connect = partial(connect, settings.db_path)
+
+    if score_fn is None:
+        def _real_score_fn(cv_text: str, jd_text: str) -> ScoreResult:
+            return score(
+                cv_text,
+                jd_text,
+                api_key=settings.openrouter_api_key,
+                model=settings.openrouter_model,
+                db_connect=app.state.db_connect,
+            )
+        score_fn = _real_score_fn
+    app.state.score_fn = score_fn
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

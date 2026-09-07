@@ -8,6 +8,7 @@ ticket the schema will need a real migration path.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
@@ -27,6 +28,17 @@ CREATE TABLE uploads (
     jd_text TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    upload_id INTEGER NOT NULL UNIQUE REFERENCES uploads(id) ON DELETE CASCADE,
+    cache_key TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_scores_cache_key ON scores(cache_key);
 """
 
 
@@ -42,5 +54,5 @@ def init_db(db_path: Path) -> None:
     if db_path.exists():
         db_path.unlink()
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    with connect(db_path) as conn:
+    with closing(connect(db_path)) as conn, conn:
         conn.executescript(SCHEMA)

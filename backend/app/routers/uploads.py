@@ -1,11 +1,20 @@
-"""Upload a CV PDF plus a pasted JD, extract text, store the pair."""
+"""Upload a CV PDF plus a pasted JD, extract text, score, store the pair."""
 
 from __future__ import annotations
+
+from contextlib import closing
 
 from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from app.pdf_extract import PdfExtractionError, extract_text
+from app.scoring import (
+    ScoreResult,
+    ScoringError,
+    cache_key,
+    persist_score,
+    read_score_for_upload,
+)
 
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
@@ -16,6 +25,7 @@ class UploadResponse(BaseModel):
     filename: str
     extracted_text: str
     jd_text: str
+    score: ScoreResult
 
 
 MAX_PDF_BYTES = 10 * 1024 * 1024
@@ -46,23 +56,50 @@ async def create_upload(
     except PdfExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    filename = cv.filename or "cv.pdf"
-
-    with request.app.state.db_connect() as conn:
+    settings = request.app.state.settings
+    with closing(request.app.state.db_connect()) as conn:
         user_row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
         if user_row is None:
             raise HTTPException(status_code=404, detail="Unknown user.")
+
+    # Score first. If scoring fails we do not persist the upload, so the
+    # client can retry cleanly without leaving orphan rows behind.
+    try:
+        result = request.app.state.score_fn(text, jd_text)
+    except ScoringError as exc:
+        raise HTTPException(status_code=502, detail=f"Scoring failed: {exc}") from exc
+
+    filename = cv.filename or "cv.pdf"
+    key = cache_key(text, jd_text, settings.openrouter_model)
+
+    with closing(request.app.state.db_connect()) as conn, conn:
         cursor = conn.execute(
             "INSERT INTO uploads(user_id, filename, file_bytes, extracted_text, jd_text) "
             "VALUES (?, ?, ?, ?, ?)",
             (user_id, filename, pdf_bytes, text, jd_text),
         )
-        conn.commit()
         upload_id = int(cursor.lastrowid)
+        persist_score(conn, upload_id, result, key=key, model=settings.openrouter_model)
 
     return UploadResponse(
         upload_id=upload_id,
         filename=filename,
         extracted_text=text,
         jd_text=jd_text,
+        score=result,
     )
+
+
+@router.get("/{upload_id}/score", response_model=ScoreResult)
+def get_upload_score(upload_id: int, request: Request) -> ScoreResult:
+    """Return the stored score for a given upload, or 404 if none."""
+    with closing(request.app.state.db_connect()) as conn:
+        upload = conn.execute(
+            "SELECT id FROM uploads WHERE id = ?", (upload_id,)
+        ).fetchone()
+    if upload is None:
+        raise HTTPException(status_code=404, detail="Unknown upload.")
+    result = read_score_for_upload(upload_id, request.app.state.db_connect)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No score for this upload.")
+    return result

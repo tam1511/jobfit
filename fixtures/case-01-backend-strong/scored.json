@@ -1,0 +1,46 @@
+{
+  "breakdown": [
+    {
+      "category": "Hard Skills Match",
+      "score": 92,
+      "evidence": "CV shows Python, FastAPI, PostgreSQL, Docker, AWS (ECS, S3, RDS) and REST API design. Kafka, OpenTelemetry and Terraform are absent but listed as nice-to-haves."
+    },
+    {
+      "category": "Experience Match",
+      "score": 88,
+      "evidence": "Six years of backend engineering aligns with the JD's 5+ years requirement; recent roles are at the seniority level described."
+    },
+    {
+      "category": "ATS Keywords",
+      "score": 85,
+      "evidence": "Core JD terms appear verbatim: Python, FastAPI, PostgreSQL, Docker, AWS, REST, ECS, S3, RDS."
+    },
+    {
+      "category": "Quantified Achievements",
+      "score": 82,
+      "evidence": "Bullets include concrete numbers for latency, throughput and cost reductions."
+    },
+    {
+      "category": "Formatting & Length",
+      "score": 88,
+      "evidence": "Summary, Experience, Skills and Education sections all present; length appropriate for a senior IC role."
+    }
+  ],
+  "gaps": [],
+  "matched_keywords": [
+    "Python",
+    "FastAPI",
+    "PostgreSQL",
+    "Docker",
+    "AWS",
+    "ECS",
+    "S3",
+    "RDS",
+    "REST"
+  ],
+  "missing_keywords": [
+    "Kafka",
+    "OpenTelemetry",
+    "Terraform"
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "breakdown": [
+    {
+      "category": "Hard Skills Match",
+      "score": 55,
+      "evidence": "SEO, Google Analytics 4 and Google Ads present. HubSpot, LinkedIn Ads and A/B testing methodology are absent."
+    },
+    {
+      "category": "Experience Match",
+      "score": 68,
+      "evidence": "Three years in digital marketing matches the JD's 3+ years; no B2B SaaS exposure named."
+    },
+    {
+      "category": "ATS Keywords",
+      "score": 58,
+      "evidence": "SEO, Google Analytics, content strategy, editorial calendar and Google Ads appear verbatim. HubSpot, LinkedIn Ads and A/B testing are missing."
+    },
+    {
+      "category": "Quantified Achievements",
+      "score": 62,
+      "evidence": "Concrete numbers for organic sessions (8k to 26k), 60 articles, USD 4k Google Ads budget."
+    },
+    {
+      "category": "Formatting & Length",
+      "score": 80,
+      "evidence": "Summary, Experience, Skills and Education sections all present; length appropriate."
+    }
+  ],
+  "gaps": [
+    {
+      "severity": "high",
+      "evidence": "The JD requires HubSpot for campaign management and lead scoring. The CV shows no HubSpot experience at all.",
+      "suggestion": "Ask the candidate about any marketing automation or CRM tools used in prior roles, and whether HubSpot has come up in training or side projects."
+    },
+    {
+      "severity": "high",
+      "evidence": "The JD asks for A/B testing on landing pages with a clear methodology. The CV describes landing page work but no experimentation.",
+      "suggestion": "Ask whether the candidate has run experiments on landing pages and, if so, how they defined success and called winners."
+    },
+    {
+      "severity": "medium",
+      "evidence": "Paid acquisition on LinkedIn Ads is required alongside Google Ads. The CV only shows Google Ads.",
+      "suggestion": "Ask if the candidate has run paid LinkedIn campaigns at any budget, or supported a colleague who did."
+    }
+  ],
+  "matched_keywords": [
+    "SEO",
+    "Google Analytics",
+    "content strategy",
+    "editorial calendar",
+    "Google Ads"
+  ],
+  "missing_keywords": [
+    "HubSpot",
+    "LinkedIn Ads",
+    "A/B testing",
+    "lead scoring"
+  ]
+}
