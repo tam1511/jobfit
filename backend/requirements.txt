@@ -7,3 +7,5 @@ pytest==8.3.4
 httpx==0.28.1
 bcrypt==4.2.1
 email-validator==2.2.0
+trafilatura==2.0.0
+playwright==1.62.0

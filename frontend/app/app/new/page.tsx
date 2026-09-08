@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-import { AuthError, uploadCv, type UploadResult } from "../../lib/api";
+import { AuthError, fetchJd, uploadCv, type UploadResult } from "../../lib/api";
 import { AppShell } from "../../components/AppShell";
 import { DisclaimerBanner } from "../../components/Disclaimer";
 import { ScorePanel } from "../../components/ScorePanel";
@@ -13,12 +13,32 @@ export default function NewScorePage() {
   const router = useRouter();
   const [company, setCompany] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
+  const [jdUrl, setJdUrl] = useState("");
   const [jdText, setJdText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleFetchJd() {
+    setError(null);
+    if (!jdUrl.trim()) return setError("Paste a link to fetch.");
+    setFetching(true);
+    try {
+      const fetched = await fetchJd(jdUrl.trim());
+      setJdText(fetched.jd_text);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        router.replace("/login");
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Could not fetch that link.");
+    } finally {
+      setFetching(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -26,7 +46,7 @@ export default function NewScorePage() {
     if (!company.trim()) return setError("Enter the company name.");
     if (!roleTitle.trim()) return setError("Enter the role title.");
     if (!file) return setError("Choose a CV to upload.");
-    if (!jdText.trim()) return setError("Paste the job description.");
+    if (!jdText.trim()) return setError("Paste the job description or fetch it from a link.");
 
     setSubmitting(true);
     try {
@@ -35,6 +55,7 @@ export default function NewScorePage() {
         roleTitle.trim(),
         jdText.trim(),
         file,
+        jdUrl.trim() || null,
       );
       setResult(uploaded);
     } catch (err) {
@@ -103,16 +124,33 @@ export default function NewScorePage() {
             )}
           </label>
 
-          <label className="block">
+          <div className="block">
             <span className="text-sm font-medium text-ink">Job description</span>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="url"
+                value={jdUrl}
+                onChange={(event) => setJdUrl(event.target.value)}
+                placeholder="Paste the job posting link (optional)"
+                className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <button
+                type="button"
+                onClick={handleFetchJd}
+                disabled={fetching || !jdUrl.trim()}
+                className="whitespace-nowrap rounded-lg border border-primary px-3 py-2 text-sm font-medium text-primary transition hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {fetching ? "Fetching..." : "Fetch JD"}
+              </button>
+            </div>
             <textarea
               value={jdText}
               onChange={(event) => setJdText(event.target.value)}
               rows={8}
-              placeholder="Paste the JD here..."
+              placeholder="Paste the JD here, or fetch it from the link above..."
               className="mt-2 block w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
-          </label>
+          </div>
         </div>
 
         {error && (

@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.jd_fetch import FetchedJd
 from app.main import create_app
 from app.scoring import ScoreCategory, ScoreGap, ScoreResult, weighted_overall
 
@@ -24,6 +25,9 @@ def settings(tmp_path: Path) -> Settings:
         frontend_dir=tmp_path / "no-frontend",
         openrouter_api_key="test-key",
         openrouter_model="test-model",
+        jd_fetch_http_timeout=5.0,
+        jd_fetch_browser_timeout=10.0,
+        jd_fetch_max_bytes=20 * 1024,
     )
 
 
@@ -54,12 +58,21 @@ def canned_score() -> ScoreResult:
     return _canned_marketing_score()
 
 
+def _stub_jd_fetch_fn(url: str) -> FetchedJd:
+    """Default JD fetcher: pretends it fetched the URL and returns a stub JD."""
+    return FetchedJd(
+        jd_text="Fake fetched JD text long enough to look plausible in tests.",
+        final_url=url,
+        used_browser=False,
+    )
+
+
 @pytest.fixture()
 def client(settings: Settings, canned_score: ScoreResult) -> TestClient:
-    """Default client uses a stub scorer that returns the marketing canned score."""
+    """Default client uses stub scorer and stub JD fetcher; no network."""
     def stub_score_fn(_cv: str, _jd: str) -> ScoreResult:
         return canned_score
-    app = create_app(settings, score_fn=stub_score_fn)
+    app = create_app(settings, score_fn=stub_score_fn, jd_fetch_fn=_stub_jd_fetch_fn)
     with TestClient(app) as tc:
         yield tc
 

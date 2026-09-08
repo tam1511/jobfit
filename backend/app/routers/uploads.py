@@ -34,6 +34,7 @@ class UploadResponse(BaseModel):
     role_title: str
     extracted_text: str
     jd_text: str
+    jd_url: str | None
     score: ScoreResult
 
 
@@ -53,6 +54,7 @@ class UploadDetail(BaseModel):
     role_title: str
     extracted_text: str
     jd_text: str
+    jd_url: str | None
     created_at: str
     score: ScoreResult
 
@@ -75,6 +77,7 @@ async def create_upload(
     role_title: str = Form(...),
     cv: UploadFile = ...,
     user: CurrentUser = Depends(current_user),
+    jd_url: str | None = Form(None),
 ) -> UploadResponse:
     if cv.content_type not in {"application/pdf", "application/x-pdf"}:
         raise HTTPException(status_code=415, detail="CV must be a PDF file.")
@@ -82,6 +85,9 @@ async def create_upload(
     jd_text = _require_field(jd_text, "Job description")
     company = _require_field(company, "Company")
     role_title = _require_field(role_title, "Role title")
+    jd_url_clean = jd_url.strip() if jd_url else None
+    if jd_url_clean == "":
+        jd_url_clean = None
 
     pdf_bytes = await cv.read()
     if not pdf_bytes:
@@ -109,9 +115,9 @@ async def create_upload(
     with closing(request.app.state.db_connect()) as conn, conn:
         cursor = conn.execute(
             "INSERT INTO uploads(user_id, company, role_title, filename, "
-            "file_bytes, extracted_text, jd_text) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user.id, company, role_title, filename, pdf_bytes, text, jd_text),
+            "file_bytes, extracted_text, jd_text, jd_url) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (user.id, company, role_title, filename, pdf_bytes, text, jd_text, jd_url_clean),
         )
         upload_id = int(cursor.lastrowid)
         persist_score(conn, upload_id, result, key=key, model=settings.openrouter_model)
@@ -123,6 +129,7 @@ async def create_upload(
         role_title=role_title,
         extracted_text=text,
         jd_text=jd_text,
+        jd_url=jd_url_clean,
         score=result,
     )
 
@@ -174,7 +181,7 @@ def _fetch_owned_upload(request: Request, upload_id: int, user_id: int) -> Any:
     with closing(request.app.state.db_connect()) as conn:
         row = conn.execute(
             "SELECT id, user_id, filename, company, role_title, extracted_text, "
-            "jd_text, created_at FROM uploads WHERE id = ?",
+            "jd_text, jd_url, created_at FROM uploads WHERE id = ?",
             (upload_id,),
         ).fetchone()
     if row is None or row["user_id"] != user_id:
@@ -199,6 +206,7 @@ def get_upload(
         role_title=row["role_title"],
         extracted_text=row["extracted_text"],
         jd_text=row["jd_text"],
+        jd_url=row["jd_url"],
         created_at=row["created_at"],
         score=score,
     )

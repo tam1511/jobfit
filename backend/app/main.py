@@ -19,12 +19,15 @@ from starlette.types import Scope
 
 from app.config import Settings, load_settings
 from app.db import connect, init_db
+from app.jd_fetch import FetchedJd, fetch_jd
 from app.routers import auth as auth_router
+from app.routers import jd as jd_router
 from app.routers import uploads as uploads_router
 from app.scoring import ScoreResult, score
 
 
 ScoreFn = Callable[[str, str], ScoreResult]
+JdFetchFn = Callable[[str], FetchedJd]
 
 HTML_CACHE = "no-cache"
 IMMUTABLE_CACHE = "public, max-age=31536000, immutable"
@@ -88,6 +91,7 @@ def _mount_frontend(app: FastAPI, frontend_dir: Path) -> None:
 def create_app(
     settings: Settings | None = None,
     score_fn: ScoreFn | None = None,
+    jd_fetch_fn: JdFetchFn | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
 
@@ -112,12 +116,24 @@ def create_app(
         score_fn = _real_score_fn
     app.state.score_fn = score_fn
 
+    if jd_fetch_fn is None:
+        def _real_jd_fetch_fn(url: str) -> FetchedJd:
+            return fetch_jd(
+                url,
+                http_timeout=settings.jd_fetch_http_timeout,
+                browser_timeout=settings.jd_fetch_browser_timeout,
+                max_bytes=settings.jd_fetch_max_bytes,
+            )
+        jd_fetch_fn = _real_jd_fetch_fn
+    app.state.jd_fetch_fn = jd_fetch_fn
+
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
     app.include_router(auth_router.router)
     app.include_router(uploads_router.router)
+    app.include_router(jd_router.router)
 
     _mount_frontend(app, settings.frontend_dir)
     return app

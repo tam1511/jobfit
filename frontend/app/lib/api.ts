@@ -38,7 +38,14 @@ export type UploadResult = {
   role_title: string;
   extracted_text: string;
   jd_text: string;
+  jd_url: string | null;
   score: ScoreResult;
+};
+
+export type FetchedJd = {
+  jd_text: string;
+  final_url: string;
+  used_browser: boolean;
 };
 
 export type UploadSummary = {
@@ -57,6 +64,7 @@ export type UploadDetail = {
   role_title: string;
   extracted_text: string;
   jd_text: string;
+  jd_url: string | null;
   created_at: string;
   score: ScoreResult;
 };
@@ -118,13 +126,23 @@ export async function uploadCv(
   roleTitle: string,
   jdText: string,
   file: File,
+  jdUrl?: string | null,
 ): Promise<UploadResult> {
   const form = new FormData();
   form.set("company", company);
   form.set("role_title", roleTitle);
   form.set("jd_text", jdText);
   form.set("cv", file);
+  if (jdUrl) form.set("jd_url", jdUrl);
   return request<UploadResult>("/api/uploads", { method: "POST", body: form });
+}
+
+export async function fetchJd(url: string): Promise<FetchedJd> {
+  return request<FetchedJd>("/api/jd/fetch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
 }
 
 export async function listUploads(filter?: {
