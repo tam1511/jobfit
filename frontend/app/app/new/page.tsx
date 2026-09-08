@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { AuthError, fetchJd, uploadCv, type UploadResult } from "../../lib/api";
 import { AppShell } from "../../components/AppShell";
 import { DisclaimerBanner } from "../../components/Disclaimer";
+import { OptimiseDrawer } from "../../components/OptimiseDrawer";
 import { ScorePanel } from "../../components/ScorePanel";
 import { applicationHref } from "../../lib/applications";
 
@@ -20,6 +21,7 @@ export default function NewScorePage() {
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [optimiseOpen, setOptimiseOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleFetchJd() {
@@ -172,7 +174,11 @@ export default function NewScorePage() {
 
       {result && (
         <div className="mt-8 space-y-4">
-          <ScorePanel score={result.score} extractedText={result.extracted_text} />
+          <ScorePanel
+            score={result.score}
+            extractedText={result.extracted_text}
+            onOptimise={() => setOptimiseOpen(true)}
+          />
           <div className="flex justify-end">
             <a
               href={applicationHref(result.company, result.role_title)}
@@ -182,6 +188,15 @@ export default function NewScorePage() {
             </a>
           </div>
         </div>
+      )}
+
+      {result && (
+        <OptimiseDrawer
+          uploadId={result.upload_id}
+          open={optimiseOpen}
+          onClose={() => setOptimiseOpen(false)}
+          onAuthError={() => router.replace("/login")}
+        />
       )}
     </AppShell>
   );

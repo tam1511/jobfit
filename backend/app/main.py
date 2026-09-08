@@ -20,14 +20,17 @@ from starlette.types import Scope
 from app.config import Settings, load_settings
 from app.db import connect, init_db
 from app.jd_fetch import FetchedJd, fetch_jd
+from app.optimise import OptimiseOutcome, TranscriptMessage, rewrite
 from app.routers import auth as auth_router
 from app.routers import jd as jd_router
+from app.routers import optimise as optimise_router
 from app.routers import uploads as uploads_router
-from app.scoring import ScoreResult, score
+from app.scoring import ScoreGap, ScoreResult, score
 
 
 ScoreFn = Callable[[str, str], ScoreResult]
 JdFetchFn = Callable[[str], FetchedJd]
+OptimiseFn = Callable[..., OptimiseOutcome]
 
 HTML_CACHE = "no-cache"
 IMMUTABLE_CACHE = "public, max-age=31536000, immutable"
@@ -92,6 +95,7 @@ def create_app(
     settings: Settings | None = None,
     score_fn: ScoreFn | None = None,
     jd_fetch_fn: JdFetchFn | None = None,
+    optimise_fn: OptimiseFn | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
 
@@ -127,6 +131,27 @@ def create_app(
         jd_fetch_fn = _real_jd_fetch_fn
     app.state.jd_fetch_fn = jd_fetch_fn
 
+    if optimise_fn is None:
+        def _real_optimise_fn(
+            *,
+            cv_text: str,
+            gap: ScoreGap,
+            gap_index: int,
+            total_gaps: int,
+            transcript: list[TranscriptMessage],
+        ) -> OptimiseOutcome:
+            return rewrite(
+                cv_text=cv_text,
+                gap=gap,
+                gap_index=gap_index,
+                total_gaps=total_gaps,
+                transcript=transcript,
+                api_key=settings.openrouter_api_key,
+                model=settings.openrouter_model,
+            )
+        optimise_fn = _real_optimise_fn
+    app.state.optimise_fn = optimise_fn
+
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -134,6 +159,7 @@ def create_app(
     app.include_router(auth_router.router)
     app.include_router(uploads_router.router)
     app.include_router(jd_router.router)
+    app.include_router(optimise_router.router)
 
     _mount_frontend(app, settings.frontend_dir)
     return app

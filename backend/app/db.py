@@ -3,7 +3,8 @@
 Schema is created once and preserved across restarts so user accounts and
 application history survive container reboots. ``user_version`` tracks the
 current schema. Version 0 is the pre-accounts (#3) shape; version 1 is
-the multi-user shape (#5); version 2 adds ``uploads.jd_url`` (#10).
+the multi-user shape (#5); version 2 adds ``uploads.jd_url`` (#10); version
+3 adds the ``optimise_*`` tables (#11).
 
 Migration policy:
 
@@ -19,7 +20,7 @@ from contextlib import closing
 from pathlib import Path
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -65,6 +66,42 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 
 CREATE INDEX IF NOT EXISTS idx_scores_cache_key ON scores(cache_key);
+
+CREATE TABLE IF NOT EXISTS optimise_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    upload_id INTEGER NOT NULL UNIQUE REFERENCES uploads(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    current_gap_index INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS optimise_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL REFERENCES optimise_sessions(id) ON DELETE CASCADE,
+    gap_index INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_optimise_messages_session
+    ON optimise_messages(session_id, id);
+
+CREATE TABLE IF NOT EXISTS optimise_rewrites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL REFERENCES optimise_sessions(id) ON DELETE CASCADE,
+    gap_index INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    original_bullet TEXT,
+    rewritten_bullet TEXT,
+    sources_json TEXT NOT NULL,
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_optimise_rewrites_session
+    ON optimise_rewrites(session_id, gap_index);
 """
 
 
@@ -90,6 +127,8 @@ def _apply_migrations(conn: sqlite3.Connection, from_version: int) -> None:
     """Additive migrations from ``from_version`` up to ``SCHEMA_VERSION``."""
     if from_version < 2:
         conn.execute("ALTER TABLE uploads ADD COLUMN jd_url TEXT")
+    # v3 additions (optimise_* tables) are created by the executescript() call
+    # in init_db() via CREATE TABLE IF NOT EXISTS, so no ALTER is needed here.
 
 
 def init_db(db_path: Path) -> None:

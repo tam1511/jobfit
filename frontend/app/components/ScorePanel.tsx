@@ -6,16 +6,31 @@ import { ScoreRing } from "./ScoreRing";
 type Props = {
   score: ScoreResult;
   extractedText?: string;
+  onOptimise?: () => void;
 };
 
-export function ScorePanel({ score, extractedText }: Props) {
+export function ScorePanel({ score, extractedText, onOptimise }: Props) {
+  const walkableGaps = score.gaps.filter((g) => g.severity === "high" || g.severity === "medium");
+  const canOptimise = Boolean(onOptimise) && walkableGaps.length > 0;
+
   return (
     <section className="space-y-6 rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
-      <div>
-        <h2 className="text-lg font-medium text-ink">Your fit score</h2>
-        <p className="text-sm text-muted">
-          Weighted overall score with a category breakdown from the rubric.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-ink">Your fit score</h2>
+          <p className="text-sm text-muted">
+            Weighted overall score with a category breakdown from the rubric.
+          </p>
+        </div>
+        {canOptimise && (
+          <button
+            type="button"
+            onClick={onOptimise}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90"
+          >
+            Optimise
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col items-center gap-8 md:flex-row md:items-start">
