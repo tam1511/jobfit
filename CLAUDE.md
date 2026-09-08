@@ -121,3 +121,17 @@ SQLite lives at `/data/jobfit.sqlite3` inside the container. Schema (`users`, `u
 Packaging is a single multi-stage Docker image (node builds the frontend, python serves both). `scripts/start-{mac,linux}.sh` / `scripts/start-windows.ps1` and matching `stop-*` counterparts wrap `docker build` and `docker run` with a `jobfit-data` named volume.
 
 Scoring itself is not wired up yet.
+
+### #4 — Deterministic scoring end-to-end
+
+`backend/app/scoring.py` owns the scoring path. It loads `rubric.json` at import, builds the OpenRouter Structured Outputs schema (category names enum-locked, `overall_score` omitted — Python computes it), and calls OpenRouter at `temperature=0` with a retry-once policy. Weights come from the rubric and are injected over the model output, so the model cannot drift. Results are cached by `sha256(cv || jd || model || rubric_version)` in a `scores` table so rubric edits invalidate stale rows.
+
+`POST /api/uploads` now scores inline: scoring runs before the upload row lands, so a `ScoringError` returns 502 with no orphan upload. `GET /api/uploads/{id}/score` reads the persisted `ScoreResult`. `create_app(settings, score_fn=None)` accepts an injected scorer for tests; `score(..., call=None)` accepts an injected HTTP call so cache behaviour can be exercised without network.
+
+Fixtures gain a `scored.json` per case (hand-crafted to satisfy the existing `expected.json` bands); `backend/tests/test_fixture_replay.py` replays them offline and, under `OPENROUTER_LIVE=1`, hits OpenRouter for real and writes back missing `scored.json` files. `.env.example` at the repo root shows the required `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` values.
+
+The frontend renders the score panel from `/api/uploads` directly: `ScoreRing` (SVG), five `CategoryBar`s, matched/missing keyword pills, and `GapCard` items. Colours flow from the visual-language tokens: `strong` ≥ 75, `partial` 50–74, `weak` < 50.
+
+Packaging shakedown from running the built image locally: the Dockerfile now copies `rubric.json` into `/app` (without it, `scoring.py` crashed at import and the container exited before uvicorn bound the port), and `scripts/start-{mac,linux}.sh` / `start-windows.ps1` pass `--env-file .env` when present so `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` reach the container. Stale-session UX after a container rebuild: `POST /api/uploads` returns 422 (not 404) with detail `"Unknown user."` when the form's `user_id` no longer exists, the frontend maps that to a `StaleSessionError`, clears localStorage, and bounces to `/?stale=1` where the login page shows a helpful notice. This shakes out cleanly against the SQLite drop-on-boot until real accounts land.
+
+FastAPI now sets explicit cache headers on the served frontend: HTML routes (`/`, `/app`, `/app/`) send `Cache-Control: no-cache` so the browser always revalidates, and content-hashed `/_next/static/*` assets go out as `public, max-age=31536000, immutable`. Fixes a class of stale-chunk 404s where a heuristic-cached `/app/index.html` from a prior build kept requesting webpack chunks that no longer existed in the new image.

@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { uploadCv, type UploadResult } from "../lib/api";
+import { StaleSessionError, uploadCv, type UploadResult } from "../lib/api";
 import { clearSession, readSession } from "../lib/session";
+import { CategoryBar } from "../components/CategoryBar";
+import { GapCard } from "../components/GapCard";
+import { ScoreRing } from "../components/ScoreRing";
 
 export default function AppPage() {
   const router = useRouter();
@@ -49,6 +52,11 @@ export default function AppPage() {
       const uploaded = await uploadCv(userId, jdText.trim(), file);
       setResult(uploaded);
     } catch (err) {
+      if (err instanceof StaleSessionError) {
+        clearSession();
+        router.replace("/?stale=1");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setSubmitting(false);
@@ -130,32 +138,96 @@ export default function AppPage() {
             disabled={submitting}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? "Reading your CV..." : "Read CV and JD"}
+            {submitting ? "Scoring your CV..." : "Score CV against JD"}
           </button>
         </div>
       </form>
 
       {result && (
-        <section className="mt-8 space-y-4 rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-medium text-ink">Extracted CV text</h2>
-              <p className="text-sm text-muted">
-                This is what will be handed to the scorer.
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled
-              title="Scoring lands in the next release."
-              className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-muted"
-            >
-              Score (coming next)
-            </button>
+        <section className="mt-8 space-y-6 rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+          <div>
+            <h2 className="text-lg font-medium text-ink">Your fit score</h2>
+            <p className="text-sm text-muted">
+              Weighted overall score with a category breakdown from the rubric.
+            </p>
           </div>
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm text-ink ring-1 ring-slate-200">
-            {result.extracted_text}
-          </pre>
+
+          <div className="flex flex-col items-center gap-8 md:flex-row md:items-start">
+            <ScoreRing score={result.score.overall_score} />
+            <div className="w-full flex-1 space-y-4">
+              {result.score.breakdown.map((c) => (
+                <CategoryBar
+                  key={c.category}
+                  category={c.category}
+                  score={c.score}
+                  weight={c.weight}
+                  evidence={c.evidence}
+                />
+              ))}
+            </div>
+          </div>
+
+          {(result.score.matched_keywords.length > 0 ||
+            result.score.missing_keywords.length > 0) && (
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-medium text-ink">Matched keywords</h3>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {result.score.matched_keywords.map((kw) => (
+                    <li
+                      key={kw}
+                      className="rounded-full border border-strong px-2.5 py-1 text-xs font-medium text-strong"
+                    >
+                      {kw}
+                    </li>
+                  ))}
+                  {result.score.matched_keywords.length === 0 && (
+                    <li className="text-xs text-muted">None</li>
+                  )}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-ink">Missing keywords</h3>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {result.score.missing_keywords.map((kw) => (
+                    <li
+                      key={kw}
+                      className="rounded-full border border-weak px-2.5 py-1 text-xs font-medium text-weak"
+                    >
+                      {kw}
+                    </li>
+                  ))}
+                  {result.score.missing_keywords.length === 0 && (
+                    <li className="text-xs text-muted">None</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h3 className="text-sm font-medium text-ink">Gaps to close</h3>
+            {result.score.gaps.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">
+                No gaps flagged against this JD.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {result.score.gaps.map((gap, idx) => (
+                  <GapCard key={idx} gap={gap} />
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <details className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+            <summary className="cursor-pointer text-sm font-medium text-ink">
+              Extracted CV text
+            </summary>
+            <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap text-sm text-ink">
+              {result.extracted_text}
+            </pre>
+          </details>
         </section>
       )}
     </main>

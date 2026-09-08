@@ -10,11 +10,16 @@ export default function LoginPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (readSession()) {
       router.replace("/app");
+      return;
+    }
+    if (new URLSearchParams(window.location.search).get("stale") === "1") {
+      setNotice("Your previous session expired. Sign in again to continue.");
     }
   }, [router]);
 
@@ -61,6 +66,12 @@ export default function LoginPage() {
             className="mt-2 block w-full rounded-lg border border-slate-300 px-3 py-2 text-ink shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </label>
+
+        {notice && !error && (
+          <p role="status" className="text-sm text-muted">
+            {notice}
+          </p>
+        )}
 
         {error && (
           <p role="alert" className="text-sm text-weak">

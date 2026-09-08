@@ -10,15 +10,33 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
+from typing import Callable
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Scope
 
 from app.config import Settings, load_settings
 from app.db import connect, init_db
 from app.routers import session as session_router
 from app.routers import uploads as uploads_router
+from app.scoring import ScoreResult, score
+
+
+ScoreFn = Callable[[str, str], ScoreResult]
+
+HTML_CACHE = "no-cache"
+IMMUTABLE_CACHE = "public, max-age=31536000, immutable"
+
+
+class ImmutableStaticFiles(StaticFiles):
+    """Serve content-hashed build artefacts with a long immutable cache."""
+
+    async def get_response(self, path: str, scope: Scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = IMMUTABLE_CACHE
+        return response
 
 
 def _mount_frontend(app: FastAPI, frontend_dir: Path) -> None:
@@ -42,21 +60,25 @@ def _mount_frontend(app: FastAPI, frontend_dir: Path) -> None:
 
     next_static = frontend_dir / "_next"
     if next_static.is_dir():
-        app.mount("/_next", StaticFiles(directory=next_static), name="next-static")
+        app.mount("/_next", ImmutableStaticFiles(directory=next_static), name="next-static")
 
     app_index = frontend_dir / "app" / "index.html"
 
     @app.get("/")
     def _root() -> FileResponse:
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": HTML_CACHE})
 
     @app.get("/app")
     @app.get("/app/")
     def _app_page() -> FileResponse:
-        return FileResponse(app_index if app_index.is_file() else index)
+        target = app_index if app_index.is_file() else index
+        return FileResponse(target, headers={"Cache-Control": HTML_CACHE})
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    score_fn: ScoreFn | None = None,
+) -> FastAPI:
     settings = settings or load_settings()
 
     @asynccontextmanager
@@ -67,6 +89,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="JobFit", lifespan=lifespan)
     app.state.settings = settings
     app.state.db_connect = partial(connect, settings.db_path)
+
+    if score_fn is None:
+        def _real_score_fn(cv_text: str, jd_text: str) -> ScoreResult:
+            return score(
+                cv_text,
+                jd_text,
+                api_key=settings.openrouter_api_key,
+                model=settings.openrouter_model,
+                db_connect=app.state.db_connect,
+            )
+        score_fn = _real_score_fn
+    app.state.score_fn = score_fn
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
