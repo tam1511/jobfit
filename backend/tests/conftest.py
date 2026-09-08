@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.jd_fetch import FetchedJd
 from app.main import create_app
+from app.optimise import OptimiseOutcome
 from app.scoring import ScoreCategory, ScoreGap, ScoreResult, weighted_overall
 
 
@@ -67,12 +68,31 @@ def _stub_jd_fetch_fn(url: str) -> FetchedJd:
     )
 
 
+def _stub_optimise_fn(**_kwargs) -> OptimiseOutcome:
+    """Default optimise turn: an 'ask' outcome. Endpoint tests that need
+    other kinds inject their own optimise_fn via create_app."""
+    return OptimiseOutcome(
+        kind="ask",
+        question="Tell me more about that experience.",
+        action=None,
+        original_bullet=None,
+        rewritten_bullet=None,
+        sources=[],
+        reason=None,
+    )
+
+
 @pytest.fixture()
 def client(settings: Settings, canned_score: ScoreResult) -> TestClient:
-    """Default client uses stub scorer and stub JD fetcher; no network."""
+    """Default client uses stub scorer, JD fetcher, and optimise fn; no network."""
     def stub_score_fn(_cv: str, _jd: str) -> ScoreResult:
         return canned_score
-    app = create_app(settings, score_fn=stub_score_fn, jd_fetch_fn=_stub_jd_fetch_fn)
+    app = create_app(
+        settings,
+        score_fn=stub_score_fn,
+        jd_fetch_fn=_stub_jd_fetch_fn,
+        optimise_fn=_stub_optimise_fn,
+    )
     with TestClient(app) as tc:
         yield tc
 

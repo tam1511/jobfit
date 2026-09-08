@@ -164,6 +164,60 @@ export async function deleteUpload(uploadId: number): Promise<void> {
   await request<void>(`/api/uploads/${uploadId}`, { method: "DELETE" });
 }
 
+export type RewriteSource = {
+  text: string;
+  origin: "cv" | "user";
+};
+
+export type OptimiseMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type OptimiseRewrite = {
+  gap_index: number;
+  action: "rewrite" | "add" | "skip";
+  original_bullet: string | null;
+  rewritten_bullet: string | null;
+  sources: RewriteSource[];
+  reason: string | null;
+};
+
+export type OptimiseSession = {
+  session_id: number;
+  upload_id: number;
+  status: "active" | "done";
+  current_gap_index: number;
+  gaps: ScoreGap[];
+  transcript: OptimiseMessage[];
+  rewrites: OptimiseRewrite[];
+};
+
+export async function startOptimise(uploadId: number): Promise<OptimiseSession> {
+  return request<OptimiseSession>("/api/optimise/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ upload_id: uploadId }),
+  });
+}
+
+export async function sendOptimiseMessage(
+  sessionId: number,
+  content: string,
+): Promise<OptimiseSession> {
+  return request<OptimiseSession>(`/api/optimise/${sessionId}/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function skipOptimiseGap(sessionId: number): Promise<OptimiseSession> {
+  return request<OptimiseSession>(`/api/optimise/${sessionId}/skip`, {
+    method: "POST",
+  });
+}
+
 async function extractError(response: Response, fallback: string): Promise<string> {
   try {
     const body = await response.json();

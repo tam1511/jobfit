@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import {
@@ -13,6 +13,7 @@ import {
 } from "../../lib/api";
 import { AppShell } from "../../components/AppShell";
 import { ComparisonPanel } from "../../components/ComparisonPanel";
+import { OptimiseDrawer } from "../../components/OptimiseDrawer";
 import { ScorePanel } from "../../components/ScorePanel";
 import { bandFor, BAND_COLOR } from "../../components/scoreThreshold";
 import { formatDate } from "../../lib/date";
@@ -26,6 +27,7 @@ export default function ApplicationPage() {
 }
 
 function ApplicationInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const company = searchParams.get("company") ?? "";
   const role = searchParams.get("role") ?? "";
@@ -34,6 +36,7 @@ function ApplicationInner() {
   const [detailA, setDetailA] = useState<UploadDetail | null>(null);
   const [detailB, setDetailB] = useState<UploadDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [optimiseUploadId, setOptimiseUploadId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!company || !role) {
@@ -166,8 +169,22 @@ function ApplicationInner() {
 
           {detailA && detailB && <ComparisonPanel a={detailA} b={detailB} />}
 
-          {detailA && !detailB && <ScorePanel score={detailA.score} />}
+          {detailA && !detailB && (
+            <ScorePanel
+              score={detailA.score}
+              onOptimise={() => setOptimiseUploadId(detailA.upload_id)}
+            />
+          )}
         </div>
+      )}
+
+      {optimiseUploadId !== null && (
+        <OptimiseDrawer
+          uploadId={optimiseUploadId}
+          open={true}
+          onClose={() => setOptimiseUploadId(null)}
+          onAuthError={() => router.replace("/login")}
+        />
       )}
     </AppShell>
   );
