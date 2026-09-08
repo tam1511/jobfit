@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { uploadCv, type UploadResult } from "../lib/api";
+import { StaleSessionError, uploadCv, type UploadResult } from "../lib/api";
 import { clearSession, readSession } from "../lib/session";
 import { CategoryBar } from "../components/CategoryBar";
 import { GapCard } from "../components/GapCard";
@@ -52,6 +52,11 @@ export default function AppPage() {
       const uploaded = await uploadCv(userId, jdText.trim(), file);
       setResult(uploaded);
     } catch (err) {
+      if (err instanceof StaleSessionError) {
+        clearSession();
+        router.replace("/?stale=1");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setSubmitting(false);

@@ -60,7 +60,10 @@ async def create_upload(
     with closing(request.app.state.db_connect()) as conn:
         user_row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
         if user_row is None:
-            raise HTTPException(status_code=404, detail="Unknown user.")
+            # 422: the user_id form field references a row that does not
+            # exist. Kept distinct from 404 so the frontend can tell a
+            # stale session apart from a missing route or resource.
+            raise HTTPException(status_code=422, detail="Unknown user.")
 
     # Score first. If scoring fails we do not persist the upload, so the
     # client can retry cleanly without leaving orphan rows behind.

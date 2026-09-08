@@ -61,7 +61,8 @@ def test_upload_rejects_unknown_user(
         data={"user_id": "9999", "jd_text": "role"},
         files={"cv": ("cv.pdf", marketing_pdf_bytes, "application/pdf")},
     )
-    assert response.status_code == 404
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Unknown user."
 
 
 def test_upload_rejects_unreadable_pdf(client: TestClient) -> None:

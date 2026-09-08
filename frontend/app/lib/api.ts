@@ -50,6 +50,13 @@ export async function login(name: string): Promise<SessionUser> {
   return response.json();
 }
 
+export class StaleSessionError extends Error {
+  constructor(message = "Your session is no longer valid.") {
+    super(message);
+    this.name = "StaleSessionError";
+  }
+}
+
 export async function uploadCv(
   userId: number,
   jdText: string,
@@ -64,7 +71,11 @@ export async function uploadCv(
     body: form,
   });
   if (!response.ok) {
-    throw new Error(await extractError(response, "Upload failed."));
+    const detail = await extractError(response, "Upload failed.");
+    if (response.status === 422 && detail === "Unknown user.") {
+      throw new StaleSessionError();
+    }
+    throw new Error(detail);
   }
   return response.json();
 }
