@@ -6,6 +6,7 @@ export function apiUrl(path: string): string {
 
 export type SessionUser = {
   user_id: number;
+  email: string;
   name: string;
 };
 
@@ -33,59 +34,116 @@ export type ScoreResult = {
 export type UploadResult = {
   upload_id: number;
   filename: string;
+  company: string;
+  role_title: string;
   extracted_text: string;
   jd_text: string;
   score: ScoreResult;
 };
 
-export async function login(name: string): Promise<SessionUser> {
-  const response = await fetch(apiUrl("/api/session"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-  if (!response.ok) {
-    throw new Error(await extractError(response, "Login failed."));
+export type UploadSummary = {
+  upload_id: number;
+  filename: string;
+  company: string;
+  role_title: string;
+  created_at: string;
+  overall_score: number;
+};
+
+export type UploadDetail = {
+  upload_id: number;
+  filename: string;
+  company: string;
+  role_title: string;
+  extracted_text: string;
+  jd_text: string;
+  created_at: string;
+  score: ScoreResult;
+};
+
+export class AuthError extends Error {
+  constructor(message = "Not authenticated.") {
+    super(message);
+    this.name = "AuthError";
   }
-  return response.json();
 }
 
-export class StaleSessionError extends Error {
-  constructor(message = "Your session is no longer valid.") {
-    super(message);
-    this.name = "StaleSessionError";
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(apiUrl(path), {
+    credentials: "include",
+    ...init,
+  });
+  if (response.status === 401) {
+    throw new AuthError();
   }
+  if (!response.ok) {
+    throw new Error(await extractError(response, "Request failed."));
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}
+
+export async function register(
+  email: string,
+  password: string,
+  name: string,
+): Promise<SessionUser> {
+  return request<SessionUser>("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, name }),
+  });
+}
+
+export async function login(email: string, password: string): Promise<SessionUser> {
+  return request<SessionUser>("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logout(): Promise<void> {
+  await request<void>("/api/auth/logout", { method: "POST" });
+}
+
+export async function me(): Promise<SessionUser> {
+  return request<SessionUser>("/api/auth/me");
 }
 
 export async function uploadCv(
-  userId: number,
+  company: string,
+  roleTitle: string,
   jdText: string,
-  file: File
+  file: File,
 ): Promise<UploadResult> {
   const form = new FormData();
-  form.set("user_id", String(userId));
+  form.set("company", company);
+  form.set("role_title", roleTitle);
   form.set("jd_text", jdText);
   form.set("cv", file);
-  const response = await fetch(apiUrl("/api/uploads"), {
-    method: "POST",
-    body: form,
-  });
-  if (!response.ok) {
-    const detail = await extractError(response, "Upload failed.");
-    if (response.status === 422 && detail === "Unknown user.") {
-      throw new StaleSessionError();
-    }
-    throw new Error(detail);
-  }
-  return response.json();
+  return request<UploadResult>("/api/uploads", { method: "POST", body: form });
 }
 
-export async function fetchScore(uploadId: number): Promise<ScoreResult> {
-  const response = await fetch(apiUrl(`/api/uploads/${uploadId}/score`));
-  if (!response.ok) {
-    throw new Error(await extractError(response, "Could not load score."));
-  }
-  return response.json();
+export async function listUploads(filter?: {
+  company?: string;
+  role_title?: string;
+}): Promise<UploadSummary[]> {
+  const params = new URLSearchParams();
+  if (filter?.company) params.set("company", filter.company);
+  if (filter?.role_title) params.set("role_title", filter.role_title);
+  const suffix = params.toString();
+  return request<UploadSummary[]>(`/api/uploads${suffix ? `?${suffix}` : ""}`);
+}
+
+export async function getUpload(uploadId: number): Promise<UploadDetail> {
+  return request<UploadDetail>(`/api/uploads/${uploadId}`);
+}
+
+export async function deleteUpload(uploadId: number): Promise<void> {
+  await request<void>(`/api/uploads/${uploadId}`, { method: "DELETE" });
 }
 
 async function extractError(response: Response, fallback: string): Promise<string> {

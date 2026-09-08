@@ -19,7 +19,7 @@ from starlette.types import Scope
 
 from app.config import Settings, load_settings
 from app.db import connect, init_db
-from app.routers import session as session_router
+from app.routers import auth as auth_router
 from app.routers import uploads as uploads_router
 from app.scoring import ScoreResult, score
 
@@ -46,8 +46,8 @@ def _mount_frontend(app: FastAPI, frontend_dir: Path) -> None:
     backend still starts; the root path just returns a helpful message
     instead of 404.
     """
-    index = frontend_dir / "index.html"
-    if not index.is_file():
+    root_index = frontend_dir / "index.html"
+    if not root_index.is_file():
         @app.get("/")
         def _no_frontend() -> JSONResponse:
             return JSONResponse(
@@ -62,17 +62,27 @@ def _mount_frontend(app: FastAPI, frontend_dir: Path) -> None:
     if next_static.is_dir():
         app.mount("/_next", ImmutableStaticFiles(directory=next_static), name="next-static")
 
-    app_index = frontend_dir / "app" / "index.html"
+    def _serve(subpath: str) -> FileResponse:
+        # Next.js static export with trailingSlash writes each route as
+        # <route>/index.html. Fall back to the root index if a route was
+        # not built (dev safety net) so the SPA can still hydrate.
+        candidate = frontend_dir / subpath / "index.html" if subpath else root_index
+        target = candidate if candidate.is_file() else root_index
+        return FileResponse(target, headers={"Cache-Control": HTML_CACHE})
 
     @app.get("/")
     def _root() -> FileResponse:
-        return FileResponse(index, headers={"Cache-Control": HTML_CACHE})
+        return _serve("")
 
-    @app.get("/app")
-    @app.get("/app/")
-    def _app_page() -> FileResponse:
-        target = app_index if app_index.is_file() else index
-        return FileResponse(target, headers={"Cache-Control": HTML_CACHE})
+    for path in ("/login", "/register", "/app", "/app/new", "/app/applications"):
+        for suffix in ("", "/"):
+            sub = path.strip("/")
+            app.add_api_route(
+                f"{path}{suffix}",
+                lambda sub=sub: _serve(sub),
+                methods=["GET"],
+                include_in_schema=False,
+            )
 
 
 def create_app(
@@ -106,7 +116,7 @@ def create_app(
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    app.include_router(session_router.router)
+    app.include_router(auth_router.router)
     app.include_router(uploads_router.router)
 
     _mount_frontend(app, settings.frontend_dir)
