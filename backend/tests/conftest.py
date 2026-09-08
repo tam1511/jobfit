@@ -64,6 +64,24 @@ def client(settings: Settings, canned_score: ScoreResult) -> TestClient:
         yield tc
 
 
+DEFAULT_CREDENTIALS = {"email": "mai@example.com", "password": "correcthorse", "name": "Mai"}
+
+
+def register(client: TestClient, **overrides: str) -> dict:
+    """Register a fresh user and return the AuthResponse body. Cookie is set on the client."""
+    payload = {**DEFAULT_CREDENTIALS, **overrides}
+    response = client.post("/api/auth/register", json=payload)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+@pytest.fixture()
+def authed_client(client: TestClient) -> TestClient:
+    """A TestClient with a fresh registered session cookie already set."""
+    register(client)
+    return client
+
+
 @pytest.fixture()
 def marketing_pdf_bytes() -> bytes:
     return (FIXTURES / "case-02-marketing-partial" / "cv.pdf").read_bytes()

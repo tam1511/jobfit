@@ -40,7 +40,7 @@ def _client(tmp_path: Path) -> TestClient:
 
 def test_html_routes_send_no_cache(tmp_path: Path) -> None:
     with _client(tmp_path) as client:
-        for path in ("/", "/app", "/app/"):
+        for path in ("/", "/login", "/register", "/app", "/app/", "/app/new", "/app/applications"):
             response = client.get(path)
             assert response.status_code == 200, path
             assert response.headers["cache-control"] == "no-cache", path

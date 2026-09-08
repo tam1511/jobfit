@@ -6,24 +6,23 @@ assert cache behaviour, error surfacing, and retry policy without HTTP.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
 from app.scoring import ScoreCategory, ScoreGap, ScoreResult, ScoringError, score, weighted_overall
+from tests.conftest import DEFAULT_CREDENTIALS
 
 
-def _login(client: TestClient, name: str = "Mai") -> int:
-    return client.post("/api/session", json={"name": name}).json()["user_id"]
+def _register(client: TestClient, email: str = DEFAULT_CREDENTIALS["email"]) -> None:
+    payload = {**DEFAULT_CREDENTIALS, "email": email}
+    client.post("/api/auth/register", json=payload)
 
 
-def _upload(client: TestClient, user_id: int, pdf: bytes, jd: str = "Digital Marketing Manager"):
+def _upload(client: TestClient, pdf: bytes, jd: str = "Digital Marketing Manager"):
     return client.post(
         "/api/uploads",
-        data={"user_id": str(user_id), "jd_text": jd},
+        data={"company": "Acme", "role_title": "Manager", "jd_text": jd},
         files={"cv": ("cv.pdf", pdf, "application/pdf")},
     )
 
@@ -54,8 +53,8 @@ def test_post_uploads_persists_score_row(
     settings: Settings, marketing_pdf_bytes: bytes
 ) -> None:
     with _make_client(settings, lambda _cv, _jd: _canned()) as client:
-        user_id = _login(client)
-        response = _upload(client, user_id, marketing_pdf_bytes)
+        _register(client)
+        response = _upload(client, marketing_pdf_bytes)
         upload_id = response.json()["upload_id"]
         follow_up = client.get(f"/api/uploads/{upload_id}/score")
         assert follow_up.status_code == 200
@@ -69,12 +68,9 @@ def test_scoring_failure_returns_502_and_no_upload_row(
         raise ScoringError("boom")
 
     with _make_client(settings, fail) as client:
-        user_id = _login(client)
-        response = _upload(client, user_id, marketing_pdf_bytes)
+        _register(client)
+        response = _upload(client, marketing_pdf_bytes)
         assert response.status_code == 502
-        # A second upload should still get user_id 1 → confirms no upload
-        # row leaked from the failed request. We check by asking for score
-        # of upload 1, which must not exist.
         assert client.get("/api/uploads/1/score").status_code == 404
 
 
@@ -82,6 +78,7 @@ def test_get_score_404_for_unknown_upload(
     settings: Settings, marketing_pdf_bytes: bytes
 ) -> None:
     with _make_client(settings, lambda _cv, _jd: _canned()) as client:
+        _register(client)
         response = client.get("/api/uploads/9999/score")
         assert response.status_code == 404
 
@@ -108,7 +105,6 @@ def test_repeat_upload_hits_scores_cache(
             "missing_keywords": ["go"],
         }
 
-    # Bind the real score() so it consults the cache table.
     app = None
 
     def real_score_fn(cv_text: str, jd_text: str) -> ScoreResult:
@@ -123,13 +119,13 @@ def test_repeat_upload_hits_scores_cache(
 
     app = create_app(settings, score_fn=real_score_fn)
     with TestClient(app) as client:
-        user_id = _login(client)
-        first = _upload(client, user_id, marketing_pdf_bytes)
-        second = _upload(client, user_id, marketing_pdf_bytes)
+        _register(client)
+        first = _upload(client, marketing_pdf_bytes)
+        second = _upload(client, marketing_pdf_bytes)
         assert first.status_code == 200
         assert second.status_code == 200
         assert first.json()["score"] == second.json()["score"]
-        assert len(calls) == 1  # cache absorbed the second call
+        assert len(calls) == 1
 
 
 def test_retry_once_then_success(settings: Settings, marketing_pdf_bytes: bytes) -> None:
@@ -166,8 +162,8 @@ def test_retry_once_then_success(settings: Settings, marketing_pdf_bytes: bytes)
 
     app = create_app(settings, score_fn=real_score_fn)
     with TestClient(app) as client:
-        user_id = _login(client)
-        response = _upload(client, user_id, marketing_pdf_bytes)
+        _register(client)
+        response = _upload(client, marketing_pdf_bytes)
         assert response.status_code == 200
         assert len(attempts) == 2
 
@@ -195,7 +191,7 @@ def test_retry_gives_up_after_second_failure(
 
     app = create_app(settings, score_fn=real_score_fn)
     with TestClient(app) as client:
-        user_id = _login(client)
-        response = _upload(client, user_id, marketing_pdf_bytes)
+        _register(client)
+        response = _upload(client, marketing_pdf_bytes)
         assert response.status_code == 502
         assert len(attempts) == 2
