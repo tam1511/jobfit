@@ -65,3 +65,57 @@ def test_init_db_creates_fresh_when_no_file(tmp_path: Path) -> None:
         assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert {"users", "sessions", "uploads", "scores"}.issubset(tables)
+
+
+def _write_v1_db(path: Path) -> None:
+    """Ticket #5 schema: uploads had no jd_url column."""
+    with closing(sqlite3.connect(path)) as conn, conn:
+        conn.executescript(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                company TEXT NOT NULL,
+                role_title TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                file_bytes BLOB NOT NULL,
+                extracted_text TEXT NOT NULL,
+                jd_text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO users(email, password_hash, name) VALUES (?, ?, ?)",
+            ("mai@example.com", "hash", "Mai"),
+        )
+        conn.execute(
+            "INSERT INTO uploads(user_id, company, role_title, filename, file_bytes, extracted_text, jd_text) "
+            "VALUES (1, 'Acme', 'Manager', 'cv.pdf', ?, 'text', 'jd')",
+            (b"pdf-bytes",),
+        )
+        conn.execute("PRAGMA user_version = 1")
+
+
+def test_init_db_migrates_v1_to_v2_adds_jd_url(tmp_path: Path) -> None:
+    db_path = tmp_path / "v1.sqlite3"
+    _write_v1_db(db_path)
+
+    init_db(db_path)
+
+    with closing(connect(db_path)) as conn:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(uploads)").fetchall()}
+        assert "jd_url" in cols
+        row = conn.execute("SELECT company, role_title, jd_url FROM uploads WHERE id=1").fetchone()
+        assert row["company"] == "Acme"
+        assert row["role_title"] == "Manager"
+        assert row["jd_url"] is None
+        assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION

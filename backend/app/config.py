@@ -31,6 +31,19 @@ class Settings:
     frontend_dir: Path
     openrouter_api_key: str
     openrouter_model: str
+    jd_fetch_http_timeout: float = 5.0
+    jd_fetch_browser_timeout: float = 10.0
+    jd_fetch_max_bytes: int = 20 * 1024
+
+
+def _env(name: str, default, cast):
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        return cast(raw)
+    except (ValueError, TypeError):
+        return default
 
 
 def load_settings() -> Settings:
@@ -46,4 +59,7 @@ def load_settings() -> Settings:
         frontend_dir=frontend_dir,
         openrouter_api_key=api_key,
         openrouter_model=model,
+        jd_fetch_http_timeout=_env("JOBFIT_JD_FETCH_HTTP_TIMEOUT", 5.0, float),
+        jd_fetch_browser_timeout=_env("JOBFIT_JD_FETCH_BROWSER_TIMEOUT", 10.0, float),
+        jd_fetch_max_bytes=_env("JOBFIT_JD_FETCH_MAX_BYTES", 20 * 1024, int),
     )

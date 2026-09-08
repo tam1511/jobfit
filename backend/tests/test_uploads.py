@@ -3,10 +3,21 @@ from fastapi.testclient import TestClient
 from tests.conftest import register
 
 
-def _upload(client: TestClient, pdf: bytes, *, company: str = "Acme", role: str = "Marketing Manager", jd: str = "Digital Marketing Manager"):
+def _upload(
+    client: TestClient,
+    pdf: bytes,
+    *,
+    company: str = "Acme",
+    role: str = "Marketing Manager",
+    jd: str = "Digital Marketing Manager",
+    jd_url: str | None = None,
+):
+    data = {"company": company, "role_title": role, "jd_text": jd}
+    if jd_url is not None:
+        data["jd_url"] = jd_url
     return client.post(
         "/api/uploads",
-        data={"company": company, "role_title": role, "jd_text": jd},
+        data=data,
         files={"cv": ("cv.pdf", pdf, "application/pdf")},
     )
 
@@ -142,3 +153,27 @@ def test_delete_upload_requires_ownership(
     register(client, email="other@example.com", name="Other")
 
     assert client.delete(f"/api/uploads/{upload_id}").status_code == 404
+
+
+def test_upload_persists_jd_url_when_provided(
+    authed_client: TestClient, marketing_pdf_bytes: bytes
+) -> None:
+    response = _upload(
+        authed_client,
+        marketing_pdf_bytes,
+        jd_url="https://example.com/jobs/1",
+    )
+    assert response.status_code == 200
+    assert response.json()["jd_url"] == "https://example.com/jobs/1"
+    upload_id = response.json()["upload_id"]
+
+    detail = authed_client.get(f"/api/uploads/{upload_id}").json()
+    assert detail["jd_url"] == "https://example.com/jobs/1"
+
+
+def test_upload_jd_url_is_null_when_absent(
+    authed_client: TestClient, marketing_pdf_bytes: bytes
+) -> None:
+    response = _upload(authed_client, marketing_pdf_bytes)
+    assert response.status_code == 200
+    assert response.json()["jd_url"] is None
