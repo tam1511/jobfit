@@ -15,7 +15,7 @@ from pypdf import PdfReader
 
 from app.config import Settings
 from app.main import create_app
-from app.optimise import OptimiseOutcome, RewriteSource
+from app.optimise import OptimiseOutcome
 from app.scoring import ScoreCategory, ScoreGap, ScoreResult, weighted_overall
 from tests.conftest import DEFAULT_CREDENTIALS, register
 
@@ -52,7 +52,6 @@ def _rewrite_outcome_fn(**_):
         action="rewrite",
         original_bullet=ORIGINAL_BULLET,
         rewritten_bullet=REWRITTEN_BULLET,
-        sources=[RewriteSource(text="LinkedIn Ads", origin="user")],
         reason=None,
     )
 
@@ -136,7 +135,7 @@ def test_409_when_only_skip_rows_present(
     def skip_fn(**_):
         return OptimiseOutcome(
             kind="skip", question=None, action=None,
-            original_bullet=None, rewritten_bullet=None, sources=[], reason="no exp",
+            original_bullet=None, rewritten_bullet=None, reason="no exp",
         )
 
     with _client(settings, optimise_fn=skip_fn) as client:

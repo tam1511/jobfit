@@ -177,3 +177,95 @@ def test_init_db_migrates_v2_to_v3_adds_optimise_tables(tmp_path: Path) -> None:
         assert conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM uploads").fetchone()[0] == 1
         assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
+
+
+def _write_v3_db(path: Path) -> None:
+    """Ticket #11 schema: optimise_rewrites still carries sources_json."""
+    with closing(sqlite3.connect(path)) as conn, conn:
+        conn.executescript(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                company TEXT NOT NULL,
+                role_title TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                file_bytes BLOB NOT NULL,
+                extracted_text TEXT NOT NULL,
+                jd_text TEXT NOT NULL,
+                jd_url TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE optimise_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                upload_id INTEGER NOT NULL UNIQUE REFERENCES uploads(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                current_gap_index INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE optimise_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL REFERENCES optimise_sessions(id) ON DELETE CASCADE,
+                gap_index INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE optimise_rewrites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL REFERENCES optimise_sessions(id) ON DELETE CASCADE,
+                gap_index INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                original_bullet TEXT,
+                rewritten_bullet TEXT,
+                sources_json TEXT NOT NULL,
+                reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO users(email, password_hash, name) VALUES (?, ?, ?)",
+            ("mai@example.com", "hash", "Mai"),
+        )
+        conn.execute(
+            "INSERT INTO uploads(user_id, company, role_title, filename, file_bytes, extracted_text, jd_text) "
+            "VALUES (1, 'Acme', 'Manager', 'cv.pdf', ?, 'text', 'jd')",
+            (b"pdf-bytes",),
+        )
+        conn.execute(
+            "INSERT INTO optimise_sessions(upload_id, user_id) VALUES (1, 1)"
+        )
+        conn.execute(
+            "INSERT INTO optimise_rewrites(session_id, gap_index, action, "
+            "original_bullet, rewritten_bullet, sources_json, reason) "
+            "VALUES (1, 0, 'skip', NULL, NULL, '[]', 'no exp')"
+        )
+        conn.execute("PRAGMA user_version = 3")
+
+
+def test_init_db_migrates_v3_to_v4_drops_sources_json(tmp_path: Path) -> None:
+    db_path = tmp_path / "v3.sqlite3"
+    _write_v3_db(db_path)
+
+    init_db(db_path)
+
+    with closing(connect(db_path)) as conn:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(optimise_rewrites)").fetchall()}
+        assert "sources_json" not in cols
+        # Existing row still there, other columns intact.
+        row = conn.execute(
+            "SELECT gap_index, action, reason FROM optimise_rewrites WHERE id=1"
+        ).fetchone()
+        assert row["gap_index"] == 0
+        assert row["action"] == "skip"
+        assert row["reason"] == "no exp"
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION

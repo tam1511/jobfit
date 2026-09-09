@@ -4,7 +4,9 @@ Schema is created once and preserved across restarts so user accounts and
 application history survive container reboots. ``user_version`` tracks the
 current schema. Version 0 is the pre-accounts (#3) shape; version 1 is
 the multi-user shape (#5); version 2 adds ``uploads.jd_url`` (#10); version
-3 adds the ``optimise_*`` tables (#11).
+3 adds the ``optimise_*`` tables (#11); version 4 drops
+``optimise_rewrites.sources_json`` (the anti-fabrication redesign — the
+model no longer returns sources).
 
 Migration policy:
 
@@ -20,7 +22,7 @@ from contextlib import closing
 from pathlib import Path
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -95,7 +97,6 @@ CREATE TABLE IF NOT EXISTS optimise_rewrites (
     action TEXT NOT NULL,
     original_bullet TEXT,
     rewritten_bullet TEXT,
-    sources_json TEXT NOT NULL,
     reason TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -129,6 +130,16 @@ def _apply_migrations(conn: sqlite3.Connection, from_version: int) -> None:
         conn.execute("ALTER TABLE uploads ADD COLUMN jd_url TEXT")
     # v3 additions (optimise_* tables) are created by the executescript() call
     # in init_db() via CREATE TABLE IF NOT EXISTS, so no ALTER is needed here.
+    if from_version < 4:
+        # v3 -> v4: drop optimise_rewrites.sources_json. The redesign
+        # removed the sources round-trip through the LLM entirely.
+        # SQLite has supported DROP COLUMN since 3.35 (2021).
+        has_sources_col = any(
+            row[1] == "sources_json"
+            for row in conn.execute("PRAGMA table_info(optimise_rewrites)").fetchall()
+        )
+        if has_sources_col:
+            conn.execute("ALTER TABLE optimise_rewrites DROP COLUMN sources_json")
 
 
 def init_db(db_path: Path) -> None:

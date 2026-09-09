@@ -164,11 +164,6 @@ export async function deleteUpload(uploadId: number): Promise<void> {
   await request<void>(`/api/uploads/${uploadId}`, { method: "DELETE" });
 }
 
-export type RewriteSource = {
-  text: string;
-  origin: "cv" | "user";
-};
-
 export type OptimiseMessage = {
   role: "user" | "assistant";
   content: string;
@@ -176,10 +171,9 @@ export type OptimiseMessage = {
 
 export type OptimiseRewrite = {
   gap_index: number;
-  action: "rewrite" | "add" | "skip";
+  action: "rewrite" | "add" | "skip" | "unavailable";
   original_bullet: string | null;
   rewritten_bullet: string | null;
-  sources: RewriteSource[];
   reason: string | null;
 };
 

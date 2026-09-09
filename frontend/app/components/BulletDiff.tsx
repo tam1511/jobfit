@@ -9,16 +9,33 @@ const ACTION_LABEL: Record<OptimiseRewrite["action"], string> = {
   rewrite: "Rewrote a bullet",
   add: "Added a new bullet",
   skip: "Skipped",
+  unavailable: "No rewrite produced",
 };
 
 const ACTION_BORDER: Record<OptimiseRewrite["action"], string> = {
   rewrite: "border-primary",
   add: "border-strong",
   skip: "border-slate-300",
+  unavailable: "border-partial/60",
 };
+
+const ACTION_PILL: Partial<Record<OptimiseRewrite["action"], { text: string; className: string }>> = {
+  skip: {
+    text: "No relevant experience",
+    className: "bg-slate-100 text-muted",
+  },
+  unavailable: {
+    text: "System couldn't rewrite",
+    className: "bg-partial/15 text-partial",
+  },
+};
+
+const isNonRewrite = (action: OptimiseRewrite["action"]) =>
+  action === "skip" || action === "unavailable";
 
 export function BulletDiff({ rewrite, gapEvidence }: Props) {
   const border = ACTION_BORDER[rewrite.action];
+  const pill = ACTION_PILL[rewrite.action];
 
   return (
     <article className={`rounded-lg border ${border} bg-white p-4`}>
@@ -26,9 +43,9 @@ export function BulletDiff({ rewrite, gapEvidence }: Props) {
         <p className="text-xs uppercase tracking-wide text-muted">
           {ACTION_LABEL[rewrite.action]}
         </p>
-        {rewrite.action === "skip" && (
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-muted">
-            Cannot fill without inventing
+        {pill && (
+          <span className={`rounded-full px-2 py-0.5 text-xs ${pill.className}`}>
+            {pill.text}
           </span>
         )}
       </div>
@@ -38,7 +55,7 @@ export function BulletDiff({ rewrite, gapEvidence }: Props) {
         {gapEvidence}
       </p>
 
-      {rewrite.action === "skip" ? (
+      {isNonRewrite(rewrite.action) ? (
         <p className="text-sm text-muted">
           {rewrite.reason ?? "Skipped."}
         </p>
@@ -65,25 +82,6 @@ export function BulletDiff({ rewrite, gapEvidence }: Props) {
         </div>
       )}
 
-      {rewrite.sources.length > 0 && (
-        <div className="mt-3 border-t border-slate-200 pt-3">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-            Sources
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {rewrite.sources.map((s, i) => (
-              <li
-                key={i}
-                className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-ink"
-                title={`From ${s.origin === "cv" ? "the CV" : "the chat"}`}
-              >
-                <span className="mr-1 uppercase text-muted">{s.origin}:</span>
-                {s.text.length > 60 ? `${s.text.slice(0, 60)}...` : s.text}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </article>
   );
 }
