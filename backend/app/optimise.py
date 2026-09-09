@@ -462,19 +462,87 @@ _DENIAL_PATTERNS = (
 )
 
 
-def is_denial(message: str) -> bool:
-    """True when the user's message reads as "I have no experience here".
+# Affirmative first-person claims. When any of these appears in the same
+# message as a denial pattern, the message is a MIXED answer, not a pure
+# denial: the candidate is saying they have some of what we asked about
+# and lack the rest. The short-circuit must not fire on mixed answers,
+# or the affirmative half gets thrown away.
+#
+# The patterns intentionally require an object after the verb ("I have
+# experience", "I've deployed models") so grammatical constructions
+# inside the denial itself ("I have never used it") never accidentally
+# match here — the denial patterns above already own that shape.
+_AFFIRMATIVE_PATTERNS = (
+    # "I have <positive quantifier> experience/knowledge/skills..."
+    re.compile(
+        r"\bi\s+(?:have|had|'ve)\s+"
+        r"(?:hands[-\s]?on|practical|direct|solid|real|extensive|significant|"
+        r"prior|previous|deep|strong|working|good|some|a\s+lot\s+of|plenty\s+of)\s+"
+        r"(?:experience|expertise|knowledge|background)\b",
+        re.I,
+    ),
+    # "I have used|worked|built|... X" — first-person past-tense action
+    # verb with a noun following. Bare "have" without an object is not
+    # enough; that could still be the start of a denial.
+    re.compile(
+        r"\bi\s+(?:have|had|'ve)\s+"
+        r"(?:used|worked|built|shipped|led|managed|run|ran|deployed|designed|"
+        r"delivered|owned|created|wrote|written|analysed|analyzed|scaled|"
+        r"launched|maintained|integrated|migrated|refactored|architected)\b",
+        re.I,
+    ),
+    # "I used|ran|built|... X" — bare past-tense first person.
+    re.compile(
+        r"\bi\s+"
+        r"(?:used|ran|built|shipped|led|managed|deployed|designed|"
+        r"delivered|owned|created|wrote|analysed|analyzed|scaled|"
+        r"launched|maintained|integrated|migrated|refactored|architected)\b",
+        re.I,
+    ),
+)
 
-    The check is deliberately conservative: it looks for first-person
-    negative constructions ("I don't have", "I've never used", "no
-    experience with") that leave no room for interpretation. Ambiguous
-    replies ("not sure", "a little bit", "kind of") are left to the
-    model — the point of the detector is to stop the chat from
-    pestering a user who has already said no.
+
+# Contrast markers signal that the sentence carrying a negation is being
+# played off against another clause — almost always an affirmative one.
+# Any of these in the message alongside a denial pattern is a strong
+# hint the message is mixed rather than a pure denial.
+_CONTRAST_MARKERS = re.compile(
+    r"\b(but|although|though|however|whereas|while|yet)\b", re.I
+)
+
+
+def is_denial(message: str) -> bool:
+    """True when the user's message reads as a PURE "I have no experience here".
+
+    The check is deliberately conservative on both sides:
+
+    - It fires on unambiguous first-person negative constructions
+      ("I don't have", "I've never used", "no experience with").
+    - It stands down on MIXED answers — messages that carry a denial
+      alongside either an affirmative first-person claim ("I have
+      hands-on experience with X") or a contrast marker ("but",
+      "although", "however"). Those messages are for the model to
+      handle: they contain real material we can rewrite from, and the
+      whole point of the guard is to not throw that away.
+
+    False negatives (a real denial the guard misses) are recoverable —
+    the user can hit Skip, or the model itself will emit ``kind="skip"``.
+    False positives (a partial answer misread as a denial) silently
+    drop the affirmative half of the candidate's message and cannot be
+    recovered from within the same turn. So err on the side of not
+    firing.
     """
     if not message or not message.strip():
         return False
-    return any(pattern.search(message) for pattern in _DENIAL_PATTERNS)
+    if not any(pattern.search(message) for pattern in _DENIAL_PATTERNS):
+        return False
+    # Denial pattern present. Now check whether the message is actually
+    # a PURE denial or a mixed one.
+    if _CONTRAST_MARKERS.search(message):
+        return False
+    if any(pattern.search(message) for pattern in _AFFIRMATIVE_PATTERNS):
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------

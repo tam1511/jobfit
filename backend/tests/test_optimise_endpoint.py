@@ -284,6 +284,71 @@ def test_fabrication_error_records_unavailable_not_user_skip(
         assert "unsupported claim" in rw["reason"].lower()
 
 
+def test_mixed_answer_with_affirmative_claim_is_not_treated_as_denial(
+    settings: Settings, marketing_pdf_bytes: bytes
+) -> None:
+    """RED reproduction (bug reported after PR #16): a candidate reply that
+    AFFIRMS one skill while admitting they lack another was mislabelled as
+    a full denial. The router's short-circuit fired on "have not yet worked
+    on large-scale enterprise AI deployments" and skipped the entire gap
+    with reason "Candidate indicated no relevant experience", throwing
+    away the affirmative half of the answer — the SPSS experience they
+    just said they had.
+
+    The router's denial short-circuit is for PURE denials only. A message
+    that mixes "I have X" with "I have not Y" must reach the model so it
+    can either rewrite around the affirmative claim, ask for one more
+    concrete detail, or (if the current gap really is about the denied
+    thing) legitimately skip via ``kind="skip"``.
+    """
+    mixed_answer = (
+        "I have hands-on experience with SPSS, having used it for statistical "
+        "analysis in my previous role. For AI deployment, I have practical "
+        "experience deploying models to production, although I have not yet "
+        "worked on large-scale enterprise AI deployments."
+    )
+
+    calls: list[dict] = []
+
+    def spy_fn(**kw):
+        calls.append(kw)
+        return OptimiseOutcome(
+            kind="ask",
+            question="Which SPSS analyses did you run in that role?",
+            action=None,
+            original_bullet=None,
+            rewritten_bullet=None,
+            reason=None,
+        )
+
+    with _client_with_gaps(settings, [HIGH_A, MEDIUM], optimise_fn=spy_fn) as client:
+        register(client)
+        upload_id = _upload(client, marketing_pdf_bytes)
+        session_id = client.post(
+            "/api/optimise/start", json={"upload_id": upload_id}
+        ).json()["session_id"]
+
+        body = client.post(
+            f"/api/optimise/{session_id}/message",
+            json={"content": mixed_answer},
+        ).json()
+
+    assert len(calls) == 1, (
+        "model must be called for mixed answers that contain an "
+        "affirmative first-person claim — a partial answer is not a denial"
+    )
+    assert body["current_gap_index"] == 0, "an ask outcome must not advance the gap"
+    assert body["rewrites"] == [], (
+        "no skip must be recorded — the user just gave us information "
+        "we can use"
+    )
+    # Sanity: the transcript preserves the user's whole answer, and the
+    # assistant's reply is the model's question, not the denial short-circuit
+    # boilerplate.
+    assert body["transcript"][0]["content"] == mixed_answer
+    assert "no relevant experience" not in body["transcript"][-1]["content"].lower()
+
+
 def test_denial_forces_skip_without_calling_model(
     settings: Settings, marketing_pdf_bytes: bytes
 ) -> None:

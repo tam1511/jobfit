@@ -348,6 +348,24 @@ def test_is_denial_matches_explicit_no_experience_phrasings() -> None:
         "please go ahead",
         "",
         "   ",
+        # Mixed answers — the affirmative half must not be thrown away.
+        # These trip a naive denial regex ("have not", "not yet") but
+        # each also contains an unambiguous first-person affirmative
+        # claim about the very thing the current gap is asking about.
+        (
+            "I have hands-on experience with SPSS, having used it for "
+            "statistical analysis in my previous role. For AI deployment, "
+            "I have practical experience deploying models to production, "
+            "although I have not yet worked on large-scale enterprise AI "
+            "deployments."
+        ),
+        "I have used HubSpot, though I have not worked with Marketo.",
+        "I've deployed models to production, but never at enterprise scale.",
+        # Mixed answer without any contrast marker — locks in the
+        # affirmative-pattern branch specifically. If someone deletes
+        # _AFFIRMATIVE_PATTERNS and relies on _CONTRAST_MARKERS alone,
+        # this case regresses.
+        "I have used Python for years. I have not used Rust.",
     ]:
         assert not is_denial(phrase), f"should not be a denial: {phrase!r}"
 

@@ -166,6 +166,7 @@ def build_system_prompt() -> str:
         "- matched_keywords: JD-important terms that appear in the CV.",
         "- missing_keywords: JD-important terms absent from the CV.",
         "- Each gap has severity (high, medium, or low), evidence (what the JD asks that the CV lacks), and suggestion (a concrete way to close the gap without fabricating experience).",
+        "- Each gap must target exactly one specific missing JD requirement. Do NOT bundle multiple missing skills, tools, or experience areas into a single gap. If the JD lists five tools and the CV shows none, emit five separate gaps — one per tool. This lets the follow-up conversation address each one on its own, so a partial answer (\"I have X but not Y\") can never be misread as a full denial.",
         "- Return JSON matching the schema exactly. No prose outside the JSON.",
     ]
     return "\n".join(lines)

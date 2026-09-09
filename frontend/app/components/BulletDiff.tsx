@@ -19,11 +19,12 @@ const ACTION_BORDER: Record<OptimiseRewrite["action"], string> = {
   unavailable: "border-partial/60",
 };
 
+// Only "unavailable" carries a pill — it flags a system-side outcome
+// distinctly. "skip" intentionally has none: the header already says
+// "Skipped" and the reason line below carries the actual explanation.
+// A fixed pill claiming "No relevant experience" was misleading when
+// the user gave a partial answer or hit Skip for a different reason.
 const ACTION_PILL: Partial<Record<OptimiseRewrite["action"], { text: string; className: string }>> = {
-  skip: {
-    text: "No relevant experience",
-    className: "bg-slate-100 text-muted",
-  },
   unavailable: {
     text: "System couldn't rewrite",
     className: "bg-partial/15 text-partial",
