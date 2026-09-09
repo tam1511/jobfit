@@ -10,10 +10,11 @@ from __future__ import annotations
 from contextlib import closing
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, current_user
+from app.cv_pdf import apply_rewrites, content_disposition, render_cv_pdf, sanitize_filename
 from app.pdf_extract import PdfExtractionError, extract_text
 from app.scoring import (
     ScoreResult,
@@ -223,6 +224,50 @@ def get_upload_score(
     if result is None:
         raise HTTPException(status_code=404, detail="No score for this upload.")
     return result
+
+
+@router.get("/{upload_id}/rewritten.pdf")
+def download_rewritten_pdf(
+    upload_id: int,
+    request: Request,
+    user: CurrentUser = Depends(current_user),
+) -> Response:
+    """Render the CV with Optimise rewrites applied and return a PDF.
+
+    Requires an existing optimise session for the upload and at least
+    one persisted ``action='rewrite'`` row; the frontend only surfaces
+    the download when rewrites exist, so failing hard here catches
+    stale clients and prevents "downloaded my own CV unchanged".
+    """
+    row = _fetch_owned_upload(request, upload_id, user.id)
+    with closing(request.app.state.db_connect()) as conn:
+        session = conn.execute(
+            "SELECT id FROM optimise_sessions WHERE upload_id = ?",
+            (upload_id,),
+        ).fetchone()
+        if session is None:
+            raise HTTPException(status_code=404, detail="No optimise session for this upload.")
+        rewrites = conn.execute(
+            "SELECT action, original_bullet, rewritten_bullet FROM optimise_rewrites "
+            "WHERE session_id = ? AND action = 'rewrite' "
+            "AND original_bullet IS NOT NULL AND rewritten_bullet IS NOT NULL "
+            "ORDER BY id ASC",
+            (session["id"],),
+        ).fetchall()
+    if not rewrites:
+        raise HTTPException(status_code=409, detail="No rewritten bullets yet.")
+
+    text = apply_rewrites(row["extracted_text"], [dict(r) for r in rewrites])
+    pdf_bytes = render_cv_pdf(text)
+    filename = sanitize_filename(user.name, row["company"], row["role_title"])
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": content_disposition(filename),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.delete("/{upload_id}")

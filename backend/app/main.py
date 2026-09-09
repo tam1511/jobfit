@@ -139,6 +139,7 @@ def create_app(
             gap_index: int,
             total_gaps: int,
             transcript: list[TranscriptMessage],
+            ask_count: int = 0,
         ) -> OptimiseOutcome:
             return rewrite(
                 cv_text=cv_text,
@@ -148,6 +149,7 @@ def create_app(
                 transcript=transcript,
                 api_key=settings.openrouter_api_key,
                 model=settings.openrouter_model,
+                ask_count=ask_count,
             )
         optimise_fn = _real_optimise_fn
     app.state.optimise_fn = optimise_fn

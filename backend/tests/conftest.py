@@ -77,7 +77,6 @@ def _stub_optimise_fn(**_kwargs) -> OptimiseOutcome:
         action=None,
         original_bullet=None,
         rewritten_bullet=None,
-        sources=[],
         reason=None,
     )
 
