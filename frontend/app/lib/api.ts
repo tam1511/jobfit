@@ -218,6 +218,35 @@ export async function skipOptimiseGap(sessionId: number): Promise<OptimiseSessio
   });
 }
 
+export async function downloadRewrittenCv(uploadId: number): Promise<void> {
+  const response = await fetch(apiUrl(`/api/uploads/${uploadId}/rewritten.pdf`), {
+    credentials: "include",
+  });
+  if (response.status === 401) throw new AuthError();
+  if (!response.ok) throw new Error(await extractError(response, "Download failed."));
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filenameFromContentDisposition(response.headers.get("content-disposition"));
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  // Firefox may cancel the download if the object URL is revoked in the
+  // same tick as click(); defer just long enough for the browser to bind
+  // the blob to the download.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function filenameFromContentDisposition(header: string | null): string {
+  if (!header) return "cv.pdf";
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (utf8) return decodeURIComponent(utf8[1]);
+  const ascii = /filename="([^"]+)"/i.exec(header);
+  return ascii ? ascii[1] : "cv.pdf";
+}
+
 async function extractError(response: Response, fallback: string): Promise<string> {
   try {
     const body = await response.json();

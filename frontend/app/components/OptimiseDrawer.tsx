@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   AuthError,
+  downloadRewrittenCv,
   sendOptimiseMessage,
   skipOptimiseGap,
   startOptimise,
@@ -59,6 +60,9 @@ export function OptimiseDrawer({ uploadId, open, onClose, onAuthError }: Props) 
 
   const currentGap: ScoreGap | undefined = session?.gaps[session.current_gap_index];
   const done = session?.status === "done";
+  const hasRewrites = Boolean(
+    session?.rewrites.some((rw) => rw.action === "rewrite"),
+  );
 
   async function handleSend(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,6 +76,20 @@ export function OptimiseDrawer({ uploadId, open, onClose, onAuthError }: Props) 
     } catch (err) {
       if (err instanceof AuthError) return onAuthError();
       setError(err instanceof Error ? err.message : "Could not send.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDownload() {
+    if (!session || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await downloadRewrittenCv(uploadId);
+    } catch (err) {
+      if (err instanceof AuthError) return onAuthError();
+      setError(err instanceof Error ? err.message : "Could not download.");
     } finally {
       setBusy(false);
     }
@@ -109,13 +127,25 @@ export function OptimiseDrawer({ uploadId, open, onClose, onAuthError }: Props) 
                 One gap at a time. I only use what you or your CV tell me.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-muted transition hover:bg-slate-100 hover:text-ink"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2">
+              {hasRewrites && (
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={busy}
+                  className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Download PDF
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-muted transition hover:bg-slate-100 hover:text-ink"
+              >
+                Close
+              </button>
+            </div>
           </div>
           {currentGap && !done && (
             <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-ink ring-1 ring-slate-200">
