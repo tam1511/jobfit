@@ -340,17 +340,38 @@ def send_message(
             ask_count=ask_count,
         )
     except FabricationError as exc:
-        _record_unavailable(
-            request,
-            session_id,
-            current_index,
-            len(gaps),
-            reason=f"The AI response contained an unsupported claim: {exc}",
-            assistant_message=(
-                "I could not produce a valid rewrite for this gap. "
-                "Try answering with more specific detail, or skip to the next gap."
-            ),
-        )
+        # First-chance recovery: stay on the current gap and ask the user
+        # for more grounded detail. Persisting an assistant message on
+        # this gap counts toward the same ``ask_count`` budget the model
+        # uses, so the loop cannot go on forever — after
+        # ``MAX_ASKS_PER_GAP`` cumulative asks (from either the model or
+        # this recovery path) we fall through to ``_record_unavailable``
+        # and advance.
+        if ask_count < MAX_ASKS_PER_GAP:
+            _persist_message(
+                request,
+                session_id,
+                current_index,
+                "assistant",
+                (
+                    "I tried to draft a rewrite but included a detail I "
+                    "couldn't verify against your CV or this chat. Could "
+                    "you share the exact tool names, numbers, or outcomes "
+                    "from your own experience so I can quote them directly?"
+                ),
+            )
+        else:
+            _record_unavailable(
+                request,
+                session_id,
+                current_index,
+                len(gaps),
+                reason=f"The AI response contained an unsupported claim: {exc}",
+                assistant_message=(
+                    "I couldn't produce a rewrite I can verify for this gap. "
+                    "Moving on to the next gap."
+                ),
+            )
     except OptimiseError as exc:
         raise HTTPException(status_code=502, detail=f"Optimise call failed: {exc}") from exc
     else:

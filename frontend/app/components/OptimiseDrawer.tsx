@@ -61,7 +61,11 @@ export function OptimiseDrawer({ uploadId, open, onClose, onAuthError }: Props) 
   const currentGap: ScoreGap | undefined = session?.gaps[session.current_gap_index];
   const done = session?.status === "done";
   const hasRewrites = Boolean(
-    session?.rewrites.some((rw) => rw.action === "rewrite"),
+    session?.rewrites.some(
+      (rw) =>
+        (rw.action === "rewrite" || rw.action === "add") &&
+        rw.rewritten_bullet,
+    ),
   );
 
   async function handleSend(event: React.FormEvent<HTMLFormElement>) {

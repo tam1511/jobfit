@@ -257,6 +257,105 @@ def test_rewrite_fabricated_metric_raises_fabrication_error() -> None:
         )
 
 
+def test_rewrite_multi_line_rewritten_bullet_raises_fabrication_error() -> None:
+    """Live production regression (#12/#17 shakedown): the model
+    occasionally emits a rewritten_bullet that starts with a duplicated
+    job header on line one and a real bullet on line two. Applied as a
+    string substitution against the CV, that stamps the header a second
+    time and produces a visibly duplicated section in the exported PDF.
+    The shape guard rejects any multi-line output.
+    """
+    def stub(_system: str, _user: str, *, api_key: str, model: str, schema: dict) -> dict:
+        return {
+            "kind": "rewrite",
+            "question": None,
+            "action": "rewrite",
+            "bullet_index": 0,
+            "rewritten_bullet": (
+                "Digital Marketing Specialist, Verano Studio 2023 - present\n"
+                "Ran Google Ads campaigns spending 60k EUR quarterly."
+            ),
+            "reason": None,
+        }
+
+    from app.optimise import FabricationError
+
+    with pytest.raises(FabricationError, match="multiple lines"):
+        rewrite(
+            cv_text=(
+                "Digital Marketing Specialist, Verano Studio (2023 - present)\n"
+                "- Ran Google Ads campaigns."
+            ),
+            gap=GAP,
+            gap_index=0,
+            total_gaps=1,
+            transcript=[TranscriptMessage(role="user", content="Spent 60k EUR quarterly.")],
+            api_key="k",
+            model="m",
+            call=stub,
+        )
+
+
+def test_rewrite_job_entry_shaped_rewritten_bullet_raises_fabrication_error() -> None:
+    """A single-line rewritten_bullet that reads as a job header must
+    also be rejected — the renderer would classify it as a new job
+    entry rather than a bullet, and downstream substitution would print
+    the role/date row twice in the PDF.
+    """
+    def stub(_system: str, _user: str, *, api_key: str, model: str, schema: dict) -> dict:
+        return {
+            "kind": "rewrite",
+            "question": None,
+            "action": "rewrite",
+            "bullet_index": 0,
+            "rewritten_bullet": "Senior Backend Engineer, PayLoop (2020 - 2023)",
+            "reason": None,
+        }
+
+    from app.optimise import FabricationError
+
+    with pytest.raises(FabricationError, match="job-entry header"):
+        rewrite(
+            cv_text=(
+                "Senior Backend Engineer, PayLoop (2020 - 2023)\n"
+                "- Ran the payments service."
+            ),
+            gap=GAP,
+            gap_index=0,
+            total_gaps=1,
+            transcript=[],
+            api_key="k",
+            model="m",
+            call=stub,
+        )
+
+
+def test_rewrite_section_title_shaped_rewritten_bullet_raises_fabrication_error() -> None:
+    def stub(_system: str, _user: str, *, api_key: str, model: str, schema: dict) -> dict:
+        return {
+            "kind": "rewrite",
+            "question": None,
+            "action": "rewrite",
+            "bullet_index": 0,
+            "rewritten_bullet": "PROFESSIONAL EXPERIENCE",
+            "reason": None,
+        }
+
+    from app.optimise import FabricationError
+
+    with pytest.raises(FabricationError, match="section-title header"):
+        rewrite(
+            cv_text="PROFESSIONAL EXPERIENCE\n- Ran things.",
+            gap=GAP,
+            gap_index=0,
+            total_gaps=1,
+            transcript=[],
+            api_key="k",
+            model="m",
+            call=stub,
+        )
+
+
 def test_rewrite_missing_api_key_fails_fast() -> None:
     calls: list[int] = []
 

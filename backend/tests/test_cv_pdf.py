@@ -59,12 +59,86 @@ def test_apply_rewrites_only_first_occurrence() -> None:
     assert out == "- bar\n- foo\n"
 
 
-def test_apply_rewrites_ignores_non_rewrite_actions() -> None:
+def test_apply_rewrites_ignores_skip_action() -> None:
+    """Skip rows must not change the CV — they represent gaps the user
+    chose to move past, not content to render."""
     rewrites = [
-        {"action": "add", "original_bullet": None, "rewritten_bullet": "- New bullet."},
         {"action": "skip", "original_bullet": None, "rewritten_bullet": None},
     ]
     assert apply_rewrites(CV, rewrites) == CV
+
+
+def test_apply_rewrites_appends_add_action_under_dedicated_section() -> None:
+    """Add rows land under an ``ADDITIONAL HIGHLIGHTS`` section at the
+    end of the document. We can't infer which job header owns an added
+    bullet from the flat text stream, so the exported PDF surfaces the
+    additions in a dedicated trailing section rather than dropping them.
+    """
+    rewrites = [
+        {
+            "action": "add",
+            "original_bullet": None,
+            "rewritten_bullet": "Delivered 3 A/B tests lifting signup conversion by 18%.",
+        },
+        {
+            "action": "add",
+            "original_bullet": None,
+            "rewritten_bullet": "Coached two junior marketers on brief writing.",
+        },
+    ]
+    out = apply_rewrites(CV, rewrites)
+    assert "ADDITIONAL HIGHLIGHTS" in out
+    assert "Delivered 3 A/B tests lifting signup conversion by 18%." in out
+    assert "Coached two junior marketers on brief writing." in out
+    # Original CV content still present.
+    assert "Ran Google Ads campaigns." in out
+
+
+def test_apply_rewrites_add_section_renders_as_section_and_bullets() -> None:
+    """The appended block must classify as a section title plus bullets
+    when the classifier processes the merged text — otherwise the export
+    would print the highlights as an unstyled tail on the previous section.
+    """
+    rewrites = [
+        {
+            "action": "add",
+            "original_bullet": None,
+            "rewritten_bullet": "Delivered 3 A/B tests lifting signup conversion by 18%.",
+        },
+    ]
+    out = apply_rewrites(CV, rewrites)
+    elements = classify_lines(out)
+    section_titles = [e.text for e in elements if e.kind == "section_title"]
+    assert "ADDITIONAL HIGHLIGHTS" in section_titles
+    trailing_bullets = [e.text for e in elements if e.kind == "bullet"]
+    assert "Delivered 3 A/B tests lifting signup conversion by 18%." in trailing_bullets
+
+
+def test_apply_rewrites_skips_add_rows_without_rewritten_bullet() -> None:
+    rewrites = [
+        {"action": "add", "original_bullet": None, "rewritten_bullet": None},
+        {"action": "add", "original_bullet": None, "rewritten_bullet": ""},
+    ]
+    assert apply_rewrites(CV, rewrites) == CV
+
+
+def test_apply_rewrites_mixes_rewrite_and_add() -> None:
+    rewrites = [
+        {
+            "action": "rewrite",
+            "original_bullet": "- Ran Google Ads campaigns.",
+            "rewritten_bullet": "- Ran Google Ads campaigns spending 60k EUR quarterly.",
+        },
+        {
+            "action": "add",
+            "original_bullet": None,
+            "rewritten_bullet": "Coached two junior marketers on brief writing.",
+        },
+    ]
+    out = apply_rewrites(CV, rewrites)
+    assert "Ran Google Ads campaigns spending 60k EUR quarterly." in out
+    assert "ADDITIONAL HIGHLIGHTS" in out
+    assert "Coached two junior marketers on brief writing." in out
 
 
 def test_apply_rewrites_skips_missing_original_or_rewritten() -> None:

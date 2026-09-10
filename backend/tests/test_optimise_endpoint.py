@@ -256,13 +256,19 @@ def test_model_skip_advances_and_records_reason(
         assert "HubSpot" in body["rewrites"][0]["reason"]
 
 
-def test_fabrication_error_records_unavailable_not_user_skip(
+def test_fabrication_under_ask_budget_stays_on_gap_with_recovery_message(
     settings: Settings, marketing_pdf_bytes: bytes
 ) -> None:
-    """FabricationError is a system failure, not the user telling us
-    they have no experience. It must not be presented as a "skip" in
-    the UI (which reads as the user's decision); it advances the gap
-    but with a distinct action so the frontend can label it correctly.
+    """A FabricationError on the first turn must NOT force-advance the
+    gap and must NOT persist an ``unavailable`` row. The router used to
+    call ``_record_unavailable`` on the very first fabrication, throwing
+    away the user's answer with a message that said "try answering with
+    more specific detail" — but the gap had already been advanced, so
+    that instruction was misleading. The new behaviour: stay on the
+    same gap, persist a recovery ask message that explains what went
+    wrong and what to send next, and let the user try again. The
+    recovery message counts toward the same ``MAX_ASKS_PER_GAP`` budget
+    the model uses, so the loop cannot spin forever.
     """
     def liar_fn(**_):
         raise FabricationError("Rewritten bullet contains unsupported claim: '45%'")
@@ -275,6 +281,55 @@ def test_fabrication_error_records_unavailable_not_user_skip(
         body = client.post(
             f"/api/optimise/{session_id}/message", json={"content": "I did some things."}
         ).json()
+
+        assert body["current_gap_index"] == 0, (
+            "a single fabrication must not force-advance the gap"
+        )
+        assert body["status"] == "active"
+        assert body["rewrites"] == [], (
+            "no unavailable row on first fabrication — the user is being "
+            "given a chance to answer differently"
+        )
+        last = body["transcript"][-1]
+        assert last["role"] == "assistant"
+        assert "couldn't verify" in last["content"].lower()
+
+
+def test_fabrication_after_ask_budget_exhausted_records_unavailable_and_advances(
+    settings: Settings, marketing_pdf_bytes: bytes
+) -> None:
+    """Once the recovery asks have consumed the whole budget, another
+    fabrication must record an ``unavailable`` row, advance the gap,
+    and use a "moving on" assistant message — not the old, misleading
+    "try answering with more specific detail" one which contradicted
+    the state (the gap had already advanced).
+    """
+    def liar_fn(**_):
+        raise FabricationError("Rewritten bullet contains unsupported claim: '45%'")
+
+    with _client_with_gaps(settings, [HIGH_A], optimise_fn=liar_fn) as client:
+        register(client)
+        upload_id = _upload(client, marketing_pdf_bytes)
+        session_id = client.post("/api/optimise/start", json={"upload_id": upload_id}).json()["session_id"]
+
+        # First MAX_ASKS_PER_GAP fabrications: each stays on the gap
+        # and appends a recovery ask.
+        body: dict = {}
+        for i in range(MAX_ASKS_PER_GAP):
+            body = client.post(
+                f"/api/optimise/{session_id}/message",
+                json={"content": f"attempt {i}"},
+            ).json()
+        assert body["current_gap_index"] == 0
+        assert body["rewrites"] == []
+
+        # One more turn — the ask budget is now exhausted, so the router
+        # gives up on this gap.
+        body = client.post(
+            f"/api/optimise/{session_id}/message",
+            json={"content": "one more attempt"},
+        ).json()
+
         assert body["status"] == "done"
         rw = body["rewrites"][0]
         assert rw["action"] == "unavailable"
@@ -282,6 +337,7 @@ def test_fabrication_error_records_unavailable_not_user_skip(
         # system-caused failure — that would blame the user.
         assert "no relevant experience" not in (rw["reason"] or "").lower()
         assert "unsupported claim" in rw["reason"].lower()
+        assert "moving on" in body["transcript"][-1]["content"].lower()
 
 
 def test_mixed_answer_with_affirmative_claim_is_not_treated_as_denial(

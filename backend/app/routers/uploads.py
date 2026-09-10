@@ -235,9 +235,10 @@ def download_rewritten_pdf(
     """Render the CV with Optimise rewrites applied and return a PDF.
 
     Requires an existing optimise session for the upload and at least
-    one persisted ``action='rewrite'`` row; the frontend only surfaces
-    the download when rewrites exist, so failing hard here catches
-    stale clients and prevents "downloaded my own CV unchanged".
+    one persisted content-producing row (``rewrite`` or ``add``). The
+    frontend only surfaces the download when such a row exists, so
+    failing hard here catches stale clients and prevents "downloaded
+    my own CV unchanged".
     """
     row = _fetch_owned_upload(request, upload_id, user.id)
     with closing(request.app.state.db_connect()) as conn:
@@ -249,8 +250,8 @@ def download_rewritten_pdf(
             raise HTTPException(status_code=404, detail="No optimise session for this upload.")
         rewrites = conn.execute(
             "SELECT action, original_bullet, rewritten_bullet FROM optimise_rewrites "
-            "WHERE session_id = ? AND action = 'rewrite' "
-            "AND original_bullet IS NOT NULL AND rewritten_bullet IS NOT NULL "
+            "WHERE session_id = ? AND action IN ('rewrite', 'add') "
+            "AND rewritten_bullet IS NOT NULL "
             "ORDER BY id ASC",
             (session["id"],),
         ).fetchall()

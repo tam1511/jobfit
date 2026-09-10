@@ -48,30 +48,48 @@ for _path in (FONT_PATH, BOLD_FONT_PATH):
 # Rewrite application
 # ---------------------------------------------------------------------------
 
+_ADD_SECTION_HEADING = "ADDITIONAL HIGHLIGHTS"
+
+
 def apply_rewrites(cv_text: str, rewrites: list[dict]) -> str:
-    """Apply ``action='rewrite'`` rows to ``cv_text`` in order.
+    """Apply ``rewrite`` and ``add`` rows from ``optimise_rewrites``.
 
-    Each rewrite dict carries the shape stored in ``optimise_rewrites``:
-    ``action``, ``original_bullet``, ``rewritten_bullet``. Only rows whose
-    action is ``rewrite`` and whose ``original_bullet`` and
-    ``rewritten_bullet`` are both non-empty are applied. The substitution
-    uses ``str.replace`` with ``count=1`` so a phrase that happens to
-    appear twice in the CV is only replaced at its first occurrence,
-    which matches the intent of a targeted bullet rewrite.
+    Each row carries ``action``, ``original_bullet``, ``rewritten_bullet``.
 
-    ``add`` and ``skip`` rows are ignored in this pass; ``add`` needs a
-    placement decision the flat text can't answer, so v1 does not
-    surface it in the exported PDF.
+    - ``rewrite`` rows use ``str.replace`` with ``count=1`` so a phrase
+      that happens to appear twice in the CV is only replaced at its
+      first occurrence.
+    - ``add`` rows are collected and appended under an
+      ``ADDITIONAL HIGHLIGHTS`` section at the end of the document.
+      The flat text stream doesn't tell us which job header owns them,
+      so v1 groups them into a dedicated trailing section rather than
+      dropping them silently — the download button appears whenever a
+      rewrite OR an add exists, so the two must produce output.
+    - ``skip`` rows are ignored.
+
+    Rows missing the fields their action needs (``rewrite`` without an
+    ``original_bullet``, either action without a ``rewritten_bullet``)
+    are skipped as if absent.
     """
     text = cv_text
+    adds: list[str] = []
     for row in rewrites:
-        if row.get("action") != "rewrite":
-            continue
-        original = row.get("original_bullet")
+        action = row.get("action")
         rewritten = row.get("rewritten_bullet")
-        if not original or not rewritten:
+        if not rewritten:
             continue
-        text = text.replace(original, rewritten, 1)
+        if action == "rewrite":
+            original = row.get("original_bullet")
+            if not original:
+                continue
+            text = text.replace(original, rewritten, 1)
+        elif action == "add":
+            adds.append(rewritten)
+    if adds:
+        appendix = "\n\n" + _ADD_SECTION_HEADING + "\n" + "\n".join(
+            f"- {bullet}" for bullet in adds
+        )
+        text = text.rstrip() + appendix
     return text
 
 

@@ -202,11 +202,12 @@ Rules:
 2. Ask at most one concrete, specific question per turn, and only when you truly need a missing fact. You have a hard budget of a few questions per gap — spend it on facts you cannot rewrite without.
 3. Do not ask the candidate to approve or confirm your phrasing. You choose the wording. Never ask "which phrasing do you prefer" or "should I go ahead" — if the candidate has provided grounded facts, commit to a rewrite immediately.
 4. If the candidate explicitly asks you to proceed, add the bullet, finish the gap, or write the bullet themselves — commit on that turn. Do not ask another clarifying question. Choose action="rewrite" or action="add" with the material you have.
-5. When you commit, either rewrite an existing bullet from the CV (action="rewrite" plus the bullet_index from the numbered CV BULLETS list) or add a fully new bullet (action="add" with bullet_index=null). Use Action Verb -> Work Performed -> Measurable Result when a metric is available; a bullet without a numeric metric is acceptable if the candidate says none exists — use qualitative outcomes and specific technologies or scope instead. Never make up a metric to complete the pattern.
-6. Never copy an existing bullet's text into "rewritten_bullet" as if it were unchanged. If you can't improve it, ask another question or skip.
-7. If the candidate says or implies they have no such experience — "I don't have that", "never done", "no experience with that", "haven't used" — choose kind="skip" immediately. Do not ask a follow-up question. Do not invite them to elaborate. The whole point of skipping is to move on.
-8. Never fabricate. Every number, percentage, currency figure, date, tool name, company name, certification, or job title in the rewritten bullet must come from either the CV or the candidate's own messages in this chat. You do not need to quote your sources back to us; the backend verifies grounding automatically.
-9. Preserve the candidate's tone.
+5. When you commit, strongly prefer action="rewrite" over action="add". Choose action="rewrite" whenever any bullet in the CV BULLETS list is even loosely related to the current gap — you can broaden or reframe an existing bullet to close the gap without discarding its context. Only pick action="add" (with bullet_index=null) when there is genuinely no existing bullet the new content could plausibly attach to. Use Action Verb -> Work Performed -> Measurable Result when a metric is available; a bullet without a numeric metric is acceptable if the candidate says none exists — use qualitative outcomes and specific technologies or scope instead. Never make up a metric to complete the pattern.
+6. "rewritten_bullet" must be a SINGLE bullet: one action, one continuous string. Do not include a job title, a company name with dates, a section header, a bullet marker (- * •), or multiple bullets. Never emit a newline inside "rewritten_bullet". If you feel you need to change more than one bullet to close the gap, pick the single most relevant one and rewrite that.
+7. Never copy an existing bullet's text into "rewritten_bullet" as if it were unchanged. If you can't improve it, ask another question or skip.
+8. If the candidate says or implies they have no such experience — "I don't have that", "never done", "no experience with that", "haven't used" — choose kind="skip" immediately. Do not ask a follow-up question. Do not invite them to elaborate. The whole point of skipping is to move on.
+9. Never fabricate. Every number, percentage, currency figure, date, tool name, company name, certification, or job title in the rewritten bullet must come from either the CV or the candidate's own messages in this chat. You do not need to quote your sources back to us; the backend verifies grounding automatically.
+10. Preserve the candidate's tone.
 
 Return only the JSON matching the provided schema. No prose outside the JSON."""
 
@@ -437,6 +438,72 @@ def verify_grounding(
             continue
         raise FabricationError(
             f"Rewritten bullet contains unsupported claim: {fact!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Shape guard
+# ---------------------------------------------------------------------------
+
+# A "Role, Company (year - year)" line. Duplicated here rather than
+# imported from ``cv_pdf`` so this module stays free of the PDF/renderer
+# import chain and its bundled-font check.
+_JOB_ENTRY_LINE_RE = re.compile(
+    r"^[^,()]+?,\s*[^()]+?\s*\([^()]*\d{4}[^()]*?\)\s*$"
+)
+
+# Section-title vocabulary borrowed from the renderer. If either list
+# ever diverges we lose a genuine rewrite, so keep them in sync.
+_KNOWN_SECTION_TITLES: frozenset[str] = frozenset(
+    s.lower() for s in (
+        "Summary", "Objective", "Profile", "About", "Overview",
+        "Experience", "Work Experience", "Employment", "Employment History",
+        "Professional Experience",
+        "Education", "Skills", "Technical Skills", "Core Skills", "Key Skills",
+        "Projects", "Certifications", "Awards", "Languages",
+        "Interests", "Publications", "Volunteer", "References", "Contact",
+    )
+)
+
+
+def _looks_like_section_title(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+    if stripped.lower() in _KNOWN_SECTION_TITLES:
+        return True
+    words = stripped.split()
+    if 2 <= len(words) <= 4 and stripped.isupper():
+        return True
+    return False
+
+
+def check_bullet_shape(text: str) -> None:
+    """Reject a ``rewritten_bullet`` that is not a single continuous bullet.
+
+    A "shaped" rewrite spans multiple visual lines — often the model
+    emits a job header on line one and one or more real bullets under
+    it, or repeats a section title in front of the bullet. Applying
+    that string via ``str.replace`` produces a rendered PDF with a
+    duplicated job header or an out-of-place section heading. The
+    grounding guard doesn't catch it because every entity in the
+    header is legitimately in the CV — but the *shape* of the response
+    isn't a bullet at all.
+    """
+    if not text:
+        return
+    if "\n" in text or "\r" in text:
+        raise FabricationError(
+            "Rewritten bullet spans multiple lines; it must be a single continuous bullet."
+        )
+    stripped = text.strip()
+    if _JOB_ENTRY_LINE_RE.match(stripped):
+        raise FabricationError(
+            "Rewritten bullet reads as a job-entry header (Role, Company (year - year))."
+        )
+    if _looks_like_section_title(stripped):
+        raise FabricationError(
+            "Rewritten bullet reads as a section-title header, not a bullet."
         )
 
 
@@ -688,6 +755,7 @@ def rewrite(
             original_bullet=original_bullet,
             user_messages=user_texts,
         )
+        check_bullet_shape(response.rewritten_bullet)
 
     return OptimiseOutcome(
         kind=response.kind,

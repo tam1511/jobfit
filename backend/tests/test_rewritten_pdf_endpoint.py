@@ -148,6 +148,46 @@ def test_409_when_only_skip_rows_present(
         assert response.status_code == 409
 
 
+def test_add_only_session_still_produces_downloadable_pdf(
+    settings: Settings, marketing_pdf_bytes: bytes
+) -> None:
+    """A session whose only content-producing outcome is an ``add`` must
+    still return a PDF. Previously the WHERE clause required
+    ``action = 'rewrite'`` and 409'd on add-only sessions, which meant
+    the frontend surfaced a Download button that always failed.
+    """
+    ADDED_BULLET = "Delivered 3 A/B tests lifting signup conversion by 18%."
+
+    def add_fn(**_):
+        return OptimiseOutcome(
+            kind="rewrite",
+            question=None,
+            action="add",
+            original_bullet=None,
+            rewritten_bullet=ADDED_BULLET,
+            reason=None,
+        )
+
+    with _client(settings, optimise_fn=add_fn) as client:
+        register(client)
+        upload_id = _upload(client, marketing_pdf_bytes)
+        session_id = _start(client, upload_id)
+        _send(
+            client, session_id,
+            "I ran 3 A/B tests lifting signup conversion by 18%.",
+        )
+
+        response = client.get(f"/api/uploads/{upload_id}/rewritten.pdf")
+        assert response.status_code == 200, response.text
+        assert response.content.startswith(b"%PDF-")
+        reader = PdfReader(BytesIO(response.content))
+        text = "\n".join(page.extract_text() for page in reader.pages)
+        # The added bullet must show up under the highlights section.
+        assert "ADDITIONAL HIGHLIGHTS" in text
+        assert "A/B tests" in text
+        assert "18%" in text
+
+
 def test_returns_pdf_with_correct_headers_and_content(
     settings: Settings, marketing_pdf_bytes: bytes
 ) -> None:
